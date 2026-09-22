@@ -15,7 +15,10 @@ async def create_crawl(
     request: CrawlRequest,
     repository: PageRepository = RepositoryDependency,
 ) -> CrawlJobResponse:
-    return await repository.create_job([str(url) for url in request.urls])
+    urls = [str(url) for url in request.urls]
+    job = await repository.create_job(urls)
+    await repository.schedule_frontier_urls(job_id=job.id, urls=urls)
+    return job
 
 
 @router.get("/jobs/{job_id}", response_model=CrawlJobResponse)

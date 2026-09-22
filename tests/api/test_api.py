@@ -23,6 +23,7 @@ def test_health_and_crawl_job_endpoints() -> None:
     job = created.json()
     assert job["id"] == 1
     assert job["requested_urls"] == ["https://example.com/"]
+    assert len(app.state.repository.frontier) == 1
 
     fetched = client.get("/jobs/1")
     assert fetched.status_code == 200

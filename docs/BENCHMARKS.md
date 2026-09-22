@@ -27,6 +27,8 @@ Raw machine-readable files:
 - `benchmarks/results/database_benchmark.json`
 - `benchmarks/results/postgres_stress_benchmark.json`
 - `benchmarks/results/postgres_high_volume_benchmark.json`
+- `benchmarks/results/frontier_recovery_demo.json`
+- `benchmarks/results/domain_rollup_benchmark.json`
 - `benchmarks/results/pgbench_run.txt`
 - `benchmarks/results/pgbench_high_volume_run.txt`
 
@@ -54,6 +56,64 @@ Latency is measured from fixture fetch start through batch save.
 | 100000 | 10 | 79.667460 | 1255.22 | 188.606 | 357.952 | 433.07 | 0 |
 | 100000 | 25 | 80.362986 | 1244.35 | 189.143 | 359.853 | 433.73 | 0 |
 | 100000 | 50 | 78.260737 | 1277.78 | 186.221 | 353.450 | 431.32 | 0 |
+
+## Durable Frontier Recovery Demo
+
+This deterministic demo exercises the V2 durable-worker semantics without hitting public
+websites. It schedules controlled fixture URLs, leases a batch to a simulated crashed
+worker, expires those leases, lets another worker recover and complete the workload, then
+delivers duplicate URLs through a second job to verify idempotent page storage.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\frontier_recovery_demo.py --records 10000 --batch-size 500 --concurrency 50
+```
+
+| Metric | Value |
+|---|---:|
+| Scheduled records | 10,000 |
+| Leases abandoned by simulated crashed worker | 500 |
+| Records recovered and completed by second worker | 10,000 |
+| Worker failures | 0 |
+| Duplicate deliveries completed | 500 |
+| Logical pages after duplicate delivery | 10,000 |
+| Lost records | 0 |
+
+The important semantic result is not raw throughput; it is recovery behavior. Work leased
+by a failed worker became claimable after lease expiration, another worker completed the
+records, and duplicate delivery did not create duplicate logical page records.
+
+## Domain Aggregate Rollup Benchmark
+
+The high-volume query suite identified the domain aggregate as the clearest million-row
+bottleneck. The V2 schema adds a `domain_stats` rollup table that can be refreshed from
+`pages` and queried directly by `/stats/domains` once populated.
+
+Command:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atlaspipe'
+.\.venv\Scripts\python benchmarks\domain_rollup_benchmark.py
+```
+
+Latest result on the 1.822M-row local table:
+
+| Metric | Value |
+|---|---:|
+| `pages` rows | 1,822,000 |
+| Domains refreshed | 10 |
+| Rollup refresh time | 3,075.336 ms |
+| Baseline aggregate avg | 230.712 ms |
+| Baseline aggregate min / max | 195.540 / 359.173 ms |
+| Rollup lookup avg | 1.086 ms |
+| Rollup lookup min / max | 0.604 / 2.953 ms |
+
+The original high-volume run recorded a colder domain aggregate around 720 ms. This
+follow-up benchmark was run after the database was already warm, so the fair comparison
+for this run is 230.7 ms baseline aggregate versus 1.09 ms rollup lookup. The result is
+still the important shape: the endpoint no longer needs a full grouped aggregate over the
+large `pages` table for every request once the rollup is refreshed.
 
 ## Insert Benchmark
 

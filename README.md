@@ -14,6 +14,10 @@ sub-2 ms indexed URL lookup, and zero failed transactions during a 100-client Po
 stress test. Benchmarked locally on PostgreSQL 16; results and methodology are
 reproducible in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
+The known million-row domain aggregate bottleneck was also addressed with a PostgreSQL
+rollup table: on the 1.822M-row local dataset, the live aggregate averaged 230.7 ms in
+the latest run while the rollup lookup averaged 1.09 ms after refresh.
+
 ## Why This Project
 
 MixRank describes its product as a data platform for company, people, job, app, and
@@ -24,6 +28,7 @@ that style of system:
 - bounded async ingestion
 - URL and domain normalization
 - content hashing and deduplication
+- durable PostgreSQL crawl frontier with leases and retry state
 - batch persistence into PostgreSQL
 - indexed domain and URL lookup
 - API access to structured records
@@ -52,14 +57,15 @@ For each processed page, AtlasPipe can capture:
 URLs
  |
  v
-Scheduler
+FastAPI / Scheduler
  |
  v
-Bounded Queue
+Durable Crawl Frontier
+PostgreSQL jobs / leases / retries
  |
- +-- Worker
- +-- Worker
- +-- Worker
+ +-- Worker process
+ +-- Worker process
+ +-- Worker process
  |
  v
 Parser
@@ -71,7 +77,7 @@ Normalizer
 Deduplicator
  |
  v
-Batch Writer
+Idempotent Page Writer
  |
  v
 PostgreSQL
@@ -85,7 +91,7 @@ FastAPI
 ```text
 src/atlaspipe/
   api/              FastAPI app, routes, dependency wiring
-  crawler/          aiohttp fetcher, retry policy, rate limiting
+  crawler/          aiohttp fetcher, retry policy, frontier worker, rate limiting
   parsing/          HTML metadata, links, email domains, technology hints
   pipeline/         validation, normalization, deduplication, bounded workers
   db/               SQLAlchemy models, repositories, query helpers
@@ -129,6 +135,12 @@ Apply migrations manually:
 .\.venv\Scripts\python -m alembic upgrade head
 ```
 
+Run the deterministic frontier recovery demo:
+
+```powershell
+.\.venv\Scripts\python scripts\frontier_recovery_demo.py
+```
+
 ## API Examples
 
 ```powershell
@@ -155,6 +167,7 @@ High-volume PostgreSQL retest on PostgreSQL 16.15:
 | normalized URL lookup avg | 1.833 ms |
 | domain + recent filter avg | 0.965 ms |
 | status-code filter avg | 0.546 ms |
+| domain aggregate rollup avg | 1.086 ms |
 
 High-concurrency `pgbench` retest:
 
@@ -179,8 +192,22 @@ Controlled full-pipeline fixture benchmark:
 | 100k p95 latency at best throughput | 353.450 ms |
 | Failures | 0 |
 
+Durable frontier recovery demo:
+
+| Test | Result |
+|---|---:|
+| Scheduled records | 10,000 |
+| Leases abandoned by simulated crashed worker | 500 |
+| Records recovered and completed by second worker | 10,000 |
+| Duplicate deliveries completed | 500 |
+| Logical pages after duplicate delivery | 10,000 |
+| Lost records | 0 |
+
 See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for methodology, raw-result file names, and
 query-plan notes.
+
+For the system-design narrative, see
+[docs/ENGINEERING_REPORT.md](docs/ENGINEERING_REPORT.md).
 
 ## Testing Coverage
 
@@ -191,6 +218,7 @@ The deterministic test suite covers:
 - malformed HTML handling
 - link classification
 - hashing and deduplication
+- durable frontier scheduling, lease recovery, and retry exhaustion
 - retry classification
 - domain concurrency limiting
 - URL safety validation
@@ -200,7 +228,7 @@ The deterministic test suite covers:
 Latest local verification:
 
 ```text
-21 tests passed
+26 tests passed
 ruff passed
 ruff format --check passed
 mypy passed
@@ -208,8 +236,8 @@ mypy passed
 
 ## Engineering Trade-offs
 
-- A single service keeps the project reviewable, while internal package boundaries leave
-  room for queue-backed workers later.
+- The durable frontier uses at-least-once delivery with idempotent page writes. AtlasPipe
+  does not claim exactly-once execution.
 - Exact hash and URL deduplication are cheap and deterministic; near-duplicate comparison
   is optional because it is more expensive and subjective.
 - PostgreSQL is a good fit for URL lookup, domain filtering, job accounting, attempts,
@@ -221,8 +249,8 @@ mypy passed
 
 - Robots.txt fetching is represented by a cache boundary but would need production-grade
   fetching and caching before broader crawling.
-- `/crawl` currently creates jobs through the API boundary; a production version should
-  move execution to durable background workers.
+- `/crawl` creates a job and schedules URLs into the durable frontier. Production
+  deployment would run separate API, scheduler, and worker processes under a supervisor.
 - Domain aggregates become expensive at million-row scale and would benefit from rollup
   tables or materialized views.
 - Docker Compose assets are included, but the high-volume benchmark was run against a

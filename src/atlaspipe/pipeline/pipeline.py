@@ -98,7 +98,7 @@ class CrawlPipeline:
                 await self._global_limiter.acquire()
                 async with self._domain_limiter.limit(domain):
                     result = await self._fetcher.fetch(url)
-                page = self._result_to_page(result)
+                page = page_from_fetch_result(result, parser=self._parser)
                 if page is None:
                     counters["failed"] += 1
                     continue
@@ -132,32 +132,38 @@ class CrawlPipeline:
             finally:
                 output.task_done()
 
-    def _result_to_page(self, result: FetchResult) -> PageRecord | None:
-        if result.error_type is not None or result.status is None:
-            return None
-        content_type = result.content_type or ""
-        if "html" not in content_type.lower() and result.body:
-            return None
 
-        html = result.body.decode("utf-8", errors="replace")
-        parsed = self._parser.parse(url=result.final_url, html=html, headers=result.headers)
-        normalized = normalize_url(result.final_url)
-        domain = urlsplit(normalized).hostname or ""
+def page_from_fetch_result(
+    result: FetchResult,
+    *,
+    parser: HtmlMetadataParser | None = None,
+) -> PageRecord | None:
+    if result.error_type is not None or result.status is None:
+        return None
+    content_type = result.content_type or ""
+    if "html" not in content_type.lower() and result.body:
+        return None
 
-        return PageRecord(
-            url=result.url,
-            normalized_url=normalized,
-            canonical_url=parsed.canonical_url,
-            domain=domain,
-            title=normalize_text_metadata(parsed.title),
-            description=normalize_text_metadata(parsed.description),
-            http_status=result.status,
-            content_type=content_type or None,
-            content_length=len(result.body),
-            html_hash=sha256_hexdigest(result.body),
-            content_hash=sha256_hexdigest(parsed.text),
-            internal_link_count=parsed.internal_link_count,
-            external_link_count=parsed.external_link_count,
-            outbound_link_count=parsed.outbound_link_count,
-            response_time_ms=result.response_time_ms,
-        )
+    resolved_parser = parser or HtmlMetadataParser()
+    html = result.body.decode("utf-8", errors="replace")
+    parsed = resolved_parser.parse(url=result.final_url, html=html, headers=result.headers)
+    normalized = normalize_url(result.final_url)
+    domain = urlsplit(normalized).hostname or ""
+
+    return PageRecord(
+        url=result.url,
+        normalized_url=normalized,
+        canonical_url=parsed.canonical_url,
+        domain=domain,
+        title=normalize_text_metadata(parsed.title),
+        description=normalize_text_metadata(parsed.description),
+        http_status=result.status,
+        content_type=content_type or None,
+        content_length=len(result.body),
+        html_hash=sha256_hexdigest(result.body),
+        content_hash=sha256_hexdigest(parsed.text),
+        internal_link_count=parsed.internal_link_count,
+        external_link_count=parsed.external_link_count,
+        outbound_link_count=parsed.outbound_link_count,
+        response_time_ms=result.response_time_ms,
+    )

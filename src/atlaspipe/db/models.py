@@ -62,6 +62,61 @@ class CrawlJob(TimestampMixin, Base):
         back_populates="job",
         cascade="all, delete-orphan",
     )
+    frontier_items: Mapped[list[CrawlFrontierItem]] = relationship(
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
+
+
+class CrawlFrontierItem(TimestampMixin, Base):
+    __tablename__ = "crawl_frontier"
+    __table_args__ = (
+        UniqueConstraint("job_id", "normalized_url", name="uq_crawl_frontier_job_url"),
+        CheckConstraint(
+            "state IN ('pending', 'leased', 'complete', 'failed', 'dead')",
+            name="ck_crawl_frontier_state",
+        ),
+        CheckConstraint("priority >= 0", name="ck_crawl_frontier_priority_nonnegative"),
+        CheckConstraint("attempt_count >= 0", name="ck_crawl_frontier_attempt_count_nonnegative"),
+        CheckConstraint("max_attempts >= 1", name="ck_crawl_frontier_max_attempts_positive"),
+        Index(
+            "ix_crawl_frontier_claimable",
+            "state",
+            "available_at",
+            "priority",
+            "created_at",
+        ),
+        Index("ix_crawl_frontier_domain_state_available", "domain", "state", "available_at"),
+        Index("ix_crawl_frontier_job_state", "job_id", "state"),
+        Index("ix_crawl_frontier_lease_expires_at", "lease_expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("crawl_jobs.id", ondelete="CASCADE"))
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_url: Mapped[str] = mapped_column(Text, nullable=False)
+    domain: Mapped[str] = mapped_column(String(255), nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    state: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending")
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="3")
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_type: Mapped[str | None] = mapped_column(String(128))
+    last_error_message: Mapped[str | None] = mapped_column(Text)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    job: Mapped[CrawlJob] = relationship(back_populates="frontier_items")
 
 
 class Page(TimestampMixin, Base):
@@ -135,6 +190,39 @@ class Page(TimestampMixin, Base):
     links: Mapped[list[Link]] = relationship(
         back_populates="source_page",
         cascade="all, delete-orphan",
+    )
+
+
+class DomainStat(Base):
+    __tablename__ = "domain_stats"
+    __table_args__ = (
+        CheckConstraint("page_count >= 0", name="ck_domain_stats_page_count_nonnegative"),
+        CheckConstraint("success_count >= 0", name="ck_domain_stats_success_count_nonnegative"),
+        CheckConstraint("failure_count >= 0", name="ck_domain_stats_failure_count_nonnegative"),
+        CheckConstraint("total_bytes >= 0", name="ck_domain_stats_total_bytes_nonnegative"),
+        CheckConstraint(
+            "unique_content_hashes >= 0",
+            name="ck_domain_stats_unique_content_hashes_nonnegative",
+        ),
+        Index("ix_domain_stats_page_count", "page_count"),
+        Index("ix_domain_stats_last_crawled_at", "last_crawled_at"),
+    )
+
+    domain: Mapped[str] = mapped_column(String(255), primary_key=True)
+    page_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    success_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    failure_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    total_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    unique_content_hashes: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        server_default="0",
+    )
+    last_crawled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    refreshed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
 
 

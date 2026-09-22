@@ -1,4 +1,4 @@
-.PHONY: install up down migrate test lint format format-check typecheck benchmark seed run
+.PHONY: install up down migrate test lint format format-check typecheck benchmark domain-rollup-benchmark frontier-demo seed run
 
 PYTHON ?= python
 
@@ -35,6 +35,12 @@ typecheck:
 benchmark:
 	$(PYTHON) benchmarks/ingestion_benchmark.py
 	$(PYTHON) benchmarks/database_benchmark.py
+
+domain-rollup-benchmark:
+	$(PYTHON) benchmarks/domain_rollup_benchmark.py
+
+frontier-demo:
+	$(PYTHON) scripts/frontier_recovery_demo.py
 
 seed:
 	$(PYTHON) scripts/seed.py
