@@ -22,7 +22,10 @@ deduplication, retry logic, rate limiting, and URL safety validation.
 Synthetic ingestion benchmark: best measured local run was 1,324.12 records/sec for 100
 records at concurrency 5. Live PostgreSQL insertion reached 8,617.46 records/sec for
 50,000 rows with batch `executemany`, compared with 2,936.69 records/sec single-row.
-`pgbench` processed 138,091 transactions in 30 seconds with zero failures at 4,664.98 TPS.
+The higher-volume PostgreSQL COPY retest loaded 1,000,000 rows in 60.274731 seconds at
+16,590.70 records/sec and left the table at 1,822,000 page rows. `pgbench` scale 50 with
+100 clients processed 263,913 transactions in 60 seconds with zero failures at
+4,484.83 TPS.
 
 ## Failure Scenarios Tested
 

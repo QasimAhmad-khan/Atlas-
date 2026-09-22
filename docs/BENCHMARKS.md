@@ -9,7 +9,9 @@ Raw machine-readable files:
 - `benchmarks/results/ingestion_benchmark.json`
 - `benchmarks/results/database_benchmark.json`
 - `benchmarks/results/postgres_stress_benchmark.json`
+- `benchmarks/results/postgres_high_volume_benchmark.json`
 - `benchmarks/results/pgbench_run.txt`
+- `benchmarks/results/pgbench_high_volume_run.txt`
 
 ## Ingestion Benchmark
 
@@ -48,6 +50,33 @@ rows and the database size was 113 MB.
 | 50000 | single_row | 1 | 17.025987 | 2936.69 |
 | 50000 | batch_executemany | 500 | 5.802174 | 8617.46 |
 
+## High-volume PostgreSQL COPY Benchmark
+
+The higher-volume retest used PostgreSQL `COPY` through asyncpg while maintaining the
+real AtlasPipe `pages` indexes. This pushed the table to 1,822,000 rows and the database
+to 2,273 MB.
+
+| Records | Mode | Chunk size | Elapsed seconds | Records/sec |
+|---:|---|---:|---:|---:|
+| 100000 | copy_records_to_table | 50000 | 6.102576 | 16386.52 |
+| 500000 | copy_records_to_table | 50000 | 28.584251 | 17492.15 |
+| 1000000 | copy_records_to_table | 50000 | 60.274731 | 16590.70 |
+
+Measured query latency averages at 1.822M `pages` rows:
+
+| Query | Avg ms | Min ms | Max ms |
+|---|---:|---:|---:|
+| lookup by normalized URL | 1.833 | 0.272 | 10.593 |
+| filter by domain and recent order | 0.965 | 0.513 | 3.105 |
+| recent pages | 0.491 | 0.365 | 0.870 |
+| status-code filter | 0.546 | 0.448 | 0.964 |
+| domain aggregate | 720.615 | 665.216 | 954.041 |
+
+`EXPLAIN ANALYZE` still showed a direct index scan for normalized URL lookup with 0.039 ms
+execution time. The domain/recent query used an index scan backward on `ix_pages_created_at`
+and returned 100 rows in 0.080 ms. The domain aggregate became the expensive query, using
+a parallel sequential scan over the 1.8M-row table and completing in 723.389 ms.
+
 Measured query latency averages:
 
 | Query | Avg ms | Min ms | Max ms |
@@ -75,6 +104,21 @@ and 4 threads for 30 seconds.
 | Average latency | 4.278 ms |
 | Latency stddev | 3.477 ms |
 | Initial connection time | 409.112 ms |
+
+## High-concurrency pgbench Retest
+
+PostgreSQL was tuned from the default connection limit to `max_connections = 250`, then
+`pgbench` was initialized at scale factor 50, producing 5,000,000 account rows. The
+benchmark ran with 100 clients and 8 threads for 60 seconds.
+
+| Metric | Value |
+|---|---:|
+| Transactions processed | 263913 |
+| Failed transactions | 0 |
+| TPS | 4484.834935 |
+| Average latency | 22.223 ms |
+| Latency stddev | 46.877 ms |
+| Initial connection time | 1400.275 ms |
 
 ## Limitations
 

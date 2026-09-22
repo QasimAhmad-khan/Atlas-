@@ -33,6 +33,8 @@ Docker is not installed.
 - Started PostgreSQL on `localhost:55432`, created AtlasPipe databases, and applied
   Alembic migrations successfully.
 - Executed live PostgreSQL insert/query/EXPLAIN stress benchmark and `pgbench`.
+- Executed higher-volume PostgreSQL COPY benchmark to 1,822,000 `pages` rows and a
+  100-client `pgbench` retest.
 
 ## Checkpoint 0 acceptance
 
@@ -59,8 +61,11 @@ Docker is not installed.
 - `python benchmarks/ingestion_benchmark.py`
 - `python benchmarks/database_benchmark.py`
 - `python benchmarks/postgres_stress_benchmark.py`
+- `python benchmarks/postgres_high_volume_benchmark.py`
 - `pgbench -h localhost -p 55432 -U atlaspipe -i -s 5 atlaspipe`
 - `pgbench -h localhost -p 55432 -U atlaspipe -c 20 -j 4 -T 30 -P 10 atlaspipe`
+- `pgbench -h localhost -p 55432 -U atlaspipe -i -s 50 atlaspipe`
+- `pgbench -h localhost -p 55432 -U atlaspipe -c 100 -j 8 -T 60 -P 15 atlaspipe`
 
 ## Test result
 
@@ -82,6 +87,10 @@ Docker is not installed.
 - Live PostgreSQL stress inserted 122,000 total `pages` rows.
 - `pgbench` processed 138,091 transactions in 30 seconds with zero failed transactions
   and 4,664.980543 TPS.
+- High-volume COPY benchmark inserted 1,000,000 rows at 16,590.70 records/sec and left
+  the `pages` table at 1,822,000 rows.
+- High-concurrency `pgbench` processed 263,913 transactions in 60 seconds with zero
+  failed transactions and 4,484.834935 TPS.
 
 ## Checkpoint 1 acceptance
 
