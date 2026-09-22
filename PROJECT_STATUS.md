@@ -2,7 +2,8 @@
 
 ## Current checkpoint
 
-Checkpoint 1 - Database Foundation in progress, blocked on live PostgreSQL availability.
+Whole-project build substantially implemented. Live PostgreSQL/Docker verification remains
+blocked by missing local system tools.
 
 ## Completed work
 
@@ -21,6 +22,13 @@ Checkpoint 1 - Database Foundation in progress, blocked on live PostgreSQL avail
 - Added async SQLAlchemy engine/session factory setup.
 - Configured Alembic with an initial PostgreSQL migration.
 - Verified Alembic can discover the migration head and generate offline PostgreSQL DDL.
+- Implemented URL normalization, HTML parsing, metadata extraction, link classification,
+  hashing, deduplication, retry classification, rate limiting, URL safety validation,
+  bounded pipeline processing, API routes, metrics, Docker assets, fixture scripts, and
+  benchmark tooling.
+- Executed deterministic local benchmarks and recorded JSON results.
+- Copied the project to `C:\atlas` once; final refreshed copy still required after latest
+  workspace edits.
 
 ## Checkpoint 0 acceptance
 
@@ -44,6 +52,8 @@ Checkpoint 1 - Database Foundation in progress, blocked on live PostgreSQL avail
 - `python -m alembic heads`
 - `python -m alembic upgrade head --sql`
 - `python -m alembic upgrade head`
+- `python benchmarks/ingestion_benchmark.py`
+- `python benchmarks/database_benchmark.py`
 
 ## Test result
 
@@ -52,7 +62,7 @@ Checkpoint 1 - Database Foundation in progress, blocked on live PostgreSQL avail
 - Ruff lint passed.
 - Ruff format check passed: 25 files already formatted.
 - Mypy passed: no issues found in 16 source files.
-- Latest pytest passed: 5 tests passed.
+- Latest pytest passed: 21 tests passed.
 - Latest Ruff lint passed.
 - Latest Ruff format check passed: 32 files already formatted.
 - Latest mypy passed: no issues found in 20 source files.
@@ -61,6 +71,8 @@ Checkpoint 1 - Database Foundation in progress, blocked on live PostgreSQL avail
   tables, constraints, and indexes.
 - Online migration failed because PostgreSQL is not reachable:
   `ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection`.
+- Ingestion benchmark completed for 100 and 1,000 record scales.
+- Database-style in-memory benchmark completed for 100, 1,000, and 10,000 record scales.
 
 ## Checkpoint 1 acceptance
 

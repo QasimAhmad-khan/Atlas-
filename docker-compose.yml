@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: atlaspipe
+      POSTGRES_PASSWORD: atlaspipe
+      POSTGRES_DB: atlaspipe
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlaspipe -d atlaspipe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://atlaspipe:atlaspipe@postgres:5432/atlaspipe
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MAX_CONCURRENCY: 10
+      PER_DOMAIN_CONCURRENCY: 2
+      REQUESTS_PER_SECOND: 5
+      REQUEST_TIMEOUT: 10
+      MAX_RETRIES: 3
+      BATCH_SIZE: 100
+      USER_AGENT: AtlasPipe/0.1 (+https://example.invalid/atlaspipe)
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

@@ -1,0 +1,68 @@
+[
+  {
+    "mode": "single_row",
+    "records": 100,
+    "batch_size": 1,
+    "saved": 100,
+    "insert_elapsed_seconds": 0.001123,
+    "records_per_second": 89007.57,
+    "query_elapsed_ms": 0.035,
+    "query_returned": 50,
+    "query_total": 100
+  },
+  {
+    "mode": "batch",
+    "records": 100,
+    "batch_size": 100,
+    "saved": 100,
+    "insert_elapsed_seconds": 0.000463,
+    "records_per_second": 216029.36,
+    "query_elapsed_ms": 0.028,
+    "query_returned": 50,
+    "query_total": 100
+  },
+  {
+    "mode": "single_row",
+    "records": 1000,
+    "batch_size": 1,
+    "saved": 1000,
+    "insert_elapsed_seconds": 0.044453,
+    "records_per_second": 22495.82,
+    "query_elapsed_ms": 0.225,
+    "query_returned": 50,
+    "query_total": 1000
+  },
+  {
+    "mode": "batch",
+    "records": 1000,
+    "batch_size": 100,
+    "saved": 1000,
+    "insert_elapsed_seconds": 0.005295,
+    "records_per_second": 188864.55,
+    "query_elapsed_ms": 0.244,
+    "query_returned": 50,
+    "query_total": 1000
+  },
+  {
+    "mode": "single_row",
+    "records": 10000,
+    "batch_size": 1,
+    "saved": 10000,
+    "insert_elapsed_seconds": 4.930653,
+    "records_per_second": 2028.13,
+    "query_elapsed_ms": 2.434,
+    "query_returned": 50,
+    "query_total": 10000
+  },
+  {
+    "mode": "batch",
+    "records": 10000,
+    "batch_size": 100,
+    "saved": 10000,
+    "insert_elapsed_seconds": 0.114415,
+    "records_per_second": 87401.05,
+    "query_elapsed_ms": 2.6,
+    "query_returned": 50,
+    "query_total": 10000
+  }
+]
