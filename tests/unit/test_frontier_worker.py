@@ -83,6 +83,44 @@ async def test_frontier_recovers_expired_leases() -> None:
     assert recovered[0].attempt_count == 2
 
 
+async def test_frontier_rejects_stale_lease_completion() -> None:
+    repository = InMemoryRepository.empty()
+    job = await repository.create_job(["https://example.com/a"])
+    await repository.schedule_frontier_urls(job_id=job.id, urls=job.requested_urls)
+
+    stale = (
+        await repository.acquire_frontier_batch(
+            owner="worker-1",
+            batch_size=1,
+            lease_seconds=30,
+        )
+    )[0]
+    repository.frontier[stale.id]["lease_expires_at"] = datetime.now(UTC) - timedelta(seconds=1)
+    recovered = (
+        await repository.acquire_frontier_batch(
+            owner="worker-2",
+            batch_size=1,
+            lease_seconds=30,
+        )
+    )[0]
+
+    stale_completion = await repository.complete_frontier_item(
+        stale.id,
+        lease_owner=stale.lease_owner,
+        lease_token=stale.lease_token,
+    )
+    valid_completion = await repository.complete_frontier_item(
+        recovered.id,
+        lease_owner=recovered.lease_owner,
+        lease_token=recovered.lease_token,
+    )
+
+    stats = await repository.frontier_stats(job_id=job.id)
+    assert stale_completion is False
+    assert valid_completion is True
+    assert stats.complete == 1
+
+
 async def test_frontier_worker_persists_pages_and_marks_work_complete() -> None:
     repository = InMemoryRepository.empty()
     job = await repository.create_job(["https://example.com/a", "https://example.com/b"])

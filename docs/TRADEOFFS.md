@@ -28,7 +28,7 @@ because it grows more expensive and can produce judgment calls.
 AtlasPipe now uses PostgreSQL as the durable crawl frontier rather than adding Celery,
 Kafka, or another external queue immediately. That keeps the system reviewable while
 still demonstrating the core distributed-worker mechanics: persisted jobs, leases,
-lease expiration, retries, dead-letter state, and idempotent writes.
+lease expiration, lease-token fencing, retries, dead-letter state, and idempotent writes.
 
 The guarantee is deliberately at-least-once delivery with idempotent storage. Exactly-once
 execution is not claimed.

@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     request_timeout: PositiveInt = 10
     max_retries: int = Field(default=3, ge=0)
     batch_size: PositiveInt = 100
+    frontier_lease_seconds: PositiveInt = 60
+    frontier_poll_interval_seconds: float = Field(default=1.0, gt=0)
     max_response_bytes: PositiveInt = 1_048_576
     user_agent: str = "AtlasPipe/0.1 (+https://example.invalid/atlaspipe)"
     log_level: str = "INFO"

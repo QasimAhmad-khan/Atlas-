@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import NotRequired, Protocol, TypedDict
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -31,6 +32,7 @@ class FrontierLease:
     domain: str
     attempt_count: int
     lease_owner: str
+    lease_token: str
     lease_expires_at: datetime
 
 
@@ -59,6 +61,7 @@ class InMemoryFrontierItem(TypedDict):
     max_attempts: int
     available_at: datetime
     lease_owner: str | None
+    lease_token: str | None
     lease_expires_at: datetime | None
     last_error_type: NotRequired[str]
     last_error_message: NotRequired[str]
@@ -109,12 +112,20 @@ class PageRepository(Protocol):
         lease_seconds: int,
     ) -> list[FrontierLease]: ...
 
-    async def complete_frontier_item(self, item_id: int) -> bool: ...
+    async def complete_frontier_item(
+        self,
+        item_id: int,
+        *,
+        lease_owner: str,
+        lease_token: str,
+    ) -> bool: ...
 
     async def fail_frontier_item(
         self,
         item_id: int,
         *,
+        lease_owner: str,
+        lease_token: str,
         error_type: str,
         error_message: str,
         retry_after_seconds: int = 0,
@@ -213,7 +224,7 @@ class SqlAlchemyRepository(Repository):
     ) -> int:
         if not urls:
             return 0
-        rows = []
+        rows: list[dict[str, str | int]] = []
         for url in urls:
             normalized = normalize_url(url)
             rows.append(
@@ -226,16 +237,19 @@ class SqlAlchemyRepository(Repository):
                     "max_attempts": max_attempts,
                 }
             )
-        statement = (
-            pg_insert(CrawlFrontierItem)
-            .values(rows)
-            .on_conflict_do_nothing(
-                index_elements=[CrawlFrontierItem.job_id, CrawlFrontierItem.normalized_url]
+        scheduled = 0
+        for chunk in _chunks(rows, 5_000):
+            statement = (
+                pg_insert(CrawlFrontierItem)
+                .values(chunk)
+                .on_conflict_do_nothing(
+                    index_elements=[CrawlFrontierItem.job_id, CrawlFrontierItem.normalized_url]
+                )
             )
-        )
-        result = await self._session.execute(statement)
+            result = await self._session.execute(statement)
+            scheduled += _rowcount(result)
         await self._session.flush()
-        return _rowcount(result)
+        return scheduled
 
     async def acquire_frontier_batch(
         self,
@@ -272,8 +286,10 @@ class SqlAlchemyRepository(Repository):
             )
         ).all()
         for item in rows:
+            lease_token = uuid4().hex
             item.state = "leased"
             item.lease_owner = owner
+            item.lease_token = lease_token
             item.lease_expires_at = lease_expires_at
             item.attempt_count += 1
             item.updated_at = now
@@ -289,19 +305,32 @@ class SqlAlchemyRepository(Repository):
                 domain=item.domain,
                 attempt_count=item.attempt_count,
                 lease_owner=owner,
+                lease_token=item.lease_token or "",
                 lease_expires_at=lease_expires_at,
             )
             for item in rows
         ]
 
-    async def complete_frontier_item(self, item_id: int) -> bool:
+    async def complete_frontier_item(
+        self,
+        item_id: int,
+        *,
+        lease_owner: str,
+        lease_token: str,
+    ) -> bool:
         now = datetime.now(UTC)
         result = await self._session.execute(
             update(CrawlFrontierItem)
-            .where(CrawlFrontierItem.id == item_id)
+            .where(
+                CrawlFrontierItem.id == item_id,
+                CrawlFrontierItem.state == "leased",
+                CrawlFrontierItem.lease_owner == lease_owner,
+                CrawlFrontierItem.lease_token == lease_token,
+            )
             .values(
                 state="complete",
                 lease_owner=None,
+                lease_token=None,
                 lease_expires_at=None,
                 completed_at=now,
                 updated_at=now,
@@ -314,11 +343,22 @@ class SqlAlchemyRepository(Repository):
         self,
         item_id: int,
         *,
+        lease_owner: str,
+        lease_token: str,
         error_type: str,
         error_message: str,
         retry_after_seconds: int = 0,
     ) -> bool:
-        item = await self._session.get(CrawlFrontierItem, item_id)
+        item = await self._session.scalar(
+            select(CrawlFrontierItem)
+            .where(
+                CrawlFrontierItem.id == item_id,
+                CrawlFrontierItem.state == "leased",
+                CrawlFrontierItem.lease_owner == lease_owner,
+                CrawlFrontierItem.lease_token == lease_token,
+            )
+            .with_for_update()
+        )
         if item is None:
             return False
         now = datetime.now(UTC)
@@ -326,6 +366,7 @@ class SqlAlchemyRepository(Repository):
         item.state = "pending" if should_retry else "dead"
         item.available_at = now + timedelta(seconds=retry_after_seconds) if should_retry else now
         item.lease_owner = None
+        item.lease_token = None
         item.lease_expires_at = None
         item.last_error_type = error_type
         item.last_error_message = error_message[:2000]
@@ -568,6 +609,7 @@ class InMemoryRepository:
                 "max_attempts": max_attempts,
                 "available_at": datetime.now(UTC),
                 "lease_owner": None,
+                "lease_token": None,
                 "lease_expires_at": None,
             }
             self.next_frontier_id += 1
@@ -592,8 +634,10 @@ class InMemoryRepository:
         claimable.sort(key=lambda item: (-item["priority"], item["id"]))
         leases: list[FrontierLease] = []
         for item in claimable[:batch_size]:
+            lease_token = uuid4().hex
             item["state"] = "leased"
             item["lease_owner"] = owner
+            item["lease_token"] = lease_token
             item["lease_expires_at"] = lease_expires_at
             item["attempt_count"] += 1
             leases.append(
@@ -605,17 +649,31 @@ class InMemoryRepository:
                     domain=item["domain"],
                     attempt_count=item["attempt_count"],
                     lease_owner=owner,
+                    lease_token=lease_token,
                     lease_expires_at=lease_expires_at,
                 )
             )
         return leases
 
-    async def complete_frontier_item(self, item_id: int) -> bool:
+    async def complete_frontier_item(
+        self,
+        item_id: int,
+        *,
+        lease_owner: str,
+        lease_token: str,
+    ) -> bool:
         item = self.frontier.get(item_id)
         if item is None:
             return False
+        if (
+            item["state"] != "leased"
+            or item["lease_owner"] != lease_owner
+            or item["lease_token"] != lease_token
+        ):
+            return False
         item["state"] = "complete"
         item["lease_owner"] = None
+        item["lease_token"] = None
         item["lease_expires_at"] = None
         return True
 
@@ -623,6 +681,8 @@ class InMemoryRepository:
         self,
         item_id: int,
         *,
+        lease_owner: str,
+        lease_token: str,
         error_type: str,
         error_message: str,
         retry_after_seconds: int = 0,
@@ -630,10 +690,17 @@ class InMemoryRepository:
         item = self.frontier.get(item_id)
         if item is None:
             return False
+        if (
+            item["state"] != "leased"
+            or item["lease_owner"] != lease_owner
+            or item["lease_token"] != lease_token
+        ):
+            return False
         should_retry = item["attempt_count"] < item["max_attempts"]
         item["state"] = "pending" if should_retry else "dead"
         item["available_at"] = datetime.now(UTC) + timedelta(seconds=retry_after_seconds)
         item["lease_owner"] = None
+        item["lease_token"] = None
         item["lease_expires_at"] = None
         item["last_error_type"] = error_type
         item["last_error_message"] = error_message
@@ -670,6 +737,10 @@ def _job_response(job: CrawlJob) -> CrawlJobResponse:
 def _rowcount(result: object) -> int:
     value = getattr(result, "rowcount", 0)
     return value if isinstance(value, int) else 0
+
+
+def _chunks[T](items: list[T], size: int) -> list[list[T]]:
+    return [items[index : index + size] for index in range(0, len(items), size)]
 
 
 def _in_memory_item_is_due(item: InMemoryFrontierItem, now: datetime) -> bool:

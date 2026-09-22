@@ -28,6 +28,7 @@ Raw machine-readable files:
 - `benchmarks/results/postgres_stress_benchmark.json`
 - `benchmarks/results/postgres_high_volume_benchmark.json`
 - `benchmarks/results/frontier_recovery_demo.json`
+- `benchmarks/results/postgres_frontier_recovery_demo.json`
 - `benchmarks/results/domain_rollup_benchmark.json`
 - `benchmarks/results/pgbench_run.txt`
 - `benchmarks/results/pgbench_high_volume_run.txt`
@@ -57,12 +58,11 @@ Latency is measured from fixture fetch start through batch save.
 | 100000 | 25 | 80.362986 | 1244.35 | 189.143 | 359.853 | 433.73 | 0 |
 | 100000 | 50 | 78.260737 | 1277.78 | 186.221 | 353.450 | 431.32 | 0 |
 
-## Durable Frontier Recovery Demo
+## Controlled Frontier Recovery Demo
 
-This deterministic demo exercises the V2 durable-worker semantics without hitting public
-websites. It schedules controlled fixture URLs, leases a batch to a simulated crashed
-worker, expires those leases, lets another worker recover and complete the workload, then
-delivers duplicate URLs through a second job to verify idempotent page storage.
+This deterministic in-memory demo exercises worker logic without hitting public websites
+or PostgreSQL. It is useful as a fast logic check, but it does not prove PostgreSQL
+locking, transaction boundaries, or `FOR UPDATE SKIP LOCKED` behavior.
 
 Command:
 
@@ -80,9 +80,40 @@ Command:
 | Logical pages after duplicate delivery | 10,000 |
 | Lost records | 0 |
 
+## PostgreSQL Frontier Recovery Demo
+
+This demo exercises the real PostgreSQL `crawl_frontier` table with SQL-backed workers.
+It schedules controlled fixture URLs, leases a batch to a simulated crashed worker,
+expires those leases in PostgreSQL, runs four SQL-backed workers, and then attempts a
+stale completion using the crashed worker's old lease token. The stale completion must be
+rejected by lease fencing.
+
+Command:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atlaspipe'
+.\.venv\Scripts\python scripts\postgres_frontier_recovery_demo.py --records 10000 --crashed-leases 500 --workers 4 --batch-size 500
+```
+
+| Metric | Value |
+|---|---:|
+| Scheduled records | 10,000 |
+| SQL-backed workers | 4 |
+| Abandoned leases | 500 |
+| Expired leases recovered | 500 |
+| Worker-claimed records | 10,000 |
+| Worker-completed records | 10,000 |
+| Worker failures | 0 |
+| Stale completions rejected | 1 |
+| Frontier complete | 10,000 |
+| Frontier pending / leased / dead | 0 / 0 / 0 |
+| Logical pages persisted | 10,000 |
+| Lost records | 0 |
+
 The important semantic result is not raw throughput; it is recovery behavior. Work leased
-by a failed worker became claimable after lease expiration, another worker completed the
-records, and duplicate delivery did not create duplicate logical page records.
+by a failed worker became claimable after lease expiration, SQL-backed workers completed
+the records through short transactions, and an old worker's stale completion was rejected
+by `lease_owner` + `lease_token` fencing.
 
 ## Domain Aggregate Rollup Benchmark
 
@@ -218,5 +249,6 @@ benchmark ran with 100 clients and 8 threads for 60 seconds.
 
 ## Limitations
 
-These numbers come from a local Windows portable PostgreSQL runtime rather than Docker
-Compose. Docker verification remains separate.
+These high-volume numbers come from a local Windows portable PostgreSQL runtime rather
+than Docker Compose. Docker Compose now includes PostgreSQL, the API, and a separate
+worker service, but the large benchmark data above was not rerun inside Docker.

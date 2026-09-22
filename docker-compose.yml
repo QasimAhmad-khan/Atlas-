@@ -39,5 +39,24 @@ services:
       timeout: 5s
       retries: 10
 
+  worker:
+    build: .
+    command: ["atlaspipe-worker"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://atlaspipe:atlaspipe@postgres:5432/atlaspipe
+      ATLASPIPE_WORKER_ID: atlaspipe-worker-1
+      MAX_CONCURRENCY: 10
+      PER_DOMAIN_CONCURRENCY: 2
+      REQUESTS_PER_SECOND: 5
+      REQUEST_TIMEOUT: 10
+      MAX_RETRIES: 3
+      BATCH_SIZE: 100
+      FRONTIER_LEASE_SECONDS: 60
+      FRONTIER_POLL_INTERVAL_SECONDS: 1
+      USER_AGENT: AtlasPipe/0.1 (+https://example.invalid/atlaspipe)
+    depends_on:
+      app:
+        condition: service_healthy
+
 volumes:
   postgres_data:

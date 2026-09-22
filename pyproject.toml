@@ -40,6 +40,7 @@ dev = [
 
 [project.scripts]
 atlaspipe = "atlaspipe.main:main"
+atlaspipe-worker = "atlaspipe.worker:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/atlaspipe"]

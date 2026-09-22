@@ -115,7 +115,7 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-One-command local verification and frontier recovery demo:
+One-command local verification and controlled in-memory frontier recovery demo:
 
 ```bash
 bash scripts/reproduce.sh
@@ -150,8 +150,9 @@ Run quality checks:
 docker compose up --build
 ```
 
-The compose stack starts PostgreSQL and the API, applies Alembic migrations on app
-startup, and exposes FastAPI on `http://localhost:8000`.
+The compose stack starts PostgreSQL, the API, and a separate worker process. The API
+applies Alembic migrations on startup, exposes FastAPI on `http://localhost:8000`, and
+uses PostgreSQL by default rather than an in-memory repository.
 
 Apply migrations manually:
 
@@ -159,10 +160,17 @@ Apply migrations manually:
 .\.venv\Scripts\python -m alembic upgrade head
 ```
 
-Run the deterministic frontier recovery demo:
+Run the controlled in-memory frontier recovery demo:
 
 ```powershell
 .\.venv\Scripts\python scripts\frontier_recovery_demo.py
+```
+
+Run the PostgreSQL-backed frontier recovery demo:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atlaspipe'
+.\.venv\Scripts\python scripts\postgres_frontier_recovery_demo.py
 ```
 
 ## API Examples
@@ -216,15 +224,17 @@ Controlled full-pipeline fixture benchmark:
 | 100k p95 latency at best throughput | 353.450 ms |
 | Failures | 0 |
 
-Durable frontier recovery demo:
+PostgreSQL frontier recovery demo:
 
 | Test | Result |
 |---|---:|
 | Scheduled records | 10,000 |
+| SQL-backed workers | 4 |
 | Leases abandoned by simulated crashed worker | 500 |
-| Records recovered and completed by second worker | 10,000 |
-| Duplicate deliveries completed | 500 |
-| Logical pages after duplicate delivery | 10,000 |
+| Expired leases recovered through PostgreSQL | 500 |
+| Completed records | 10,000 |
+| Stale completions rejected by lease fencing | 1 |
+| Logical pages persisted | 10,000 |
 | Lost records | 0 |
 
 See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for methodology, raw-result file names, and
@@ -252,7 +262,7 @@ The deterministic test suite covers:
 Latest local verification:
 
 ```text
-26 tests passed
+27 tests passed
 ruff passed
 ruff format --check passed
 mypy passed
@@ -273,9 +283,10 @@ mypy passed
 
 - Robots.txt fetching is represented by a cache boundary but would need production-grade
   fetching and caching before broader crawling.
-- `/crawl` creates a job and schedules URLs into the durable frontier. Production
-  deployment would run separate API, scheduler, and worker processes under a supervisor.
-- Domain aggregates become expensive at million-row scale and would benefit from rollup
-  tables or materialized views.
+- `/crawl` creates a job and schedules URLs into the durable frontier. Docker Compose now
+  runs a separate worker process; production deployment would still need a real
+  supervisor and multiple worker replicas.
+- Domain aggregates became expensive at million-row scale; AtlasPipe now includes a
+  measured `domain_stats` rollup path. A production system would need a freshness policy.
 - Docker Compose assets are included, but the high-volume benchmark was run against a
   local PostgreSQL 16.15 runtime on Windows rather than inside Docker.

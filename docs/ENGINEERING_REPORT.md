@@ -34,7 +34,7 @@ the benchmark docs because it is useful evidence, not something to hide.
 ## 4. Distributed Frontier Design
 
 V2 adds a PostgreSQL-backed `crawl_frontier` table. It stores each unit of crawl work with
-state, priority, attempts, lease owner, lease expiry, availability time, and error
+state, priority, attempts, lease owner, lease token, lease expiry, availability time, and error
 metadata.
 
 Workers claim work with `FOR UPDATE SKIP LOCKED` semantics in the SQLAlchemy repository.
@@ -49,16 +49,20 @@ Exactly-once execution is not claimed.
 
 If a worker dies after leasing work, that work remains `leased` until
 `lease_expires_at`. Another worker can then acquire it and increment `attempt_count`.
-Failures retry until `max_attempts`, then move to `dead`.
+Failures retry until `max_attempts`, then move to `dead`. Completion and failure updates
+are fenced by `lease_owner` and `lease_token`, so a stale worker cannot complete a lease
+that has already expired and been acquired by another worker.
 
-The deterministic recovery demo scheduled 10,000 records, abandoned 500 leases, expired
-them, and let another worker recover the workload. Final result:
+The PostgreSQL recovery demo scheduled 10,000 records, abandoned 500 leases, expired them
+in PostgreSQL, and ran four SQL-backed workers. Final result:
 
 - Scheduled: 10,000
+- SQL-backed workers: 4
+- Expired leases recovered: 500
 - Completed: 10,000
+- Stale completions rejected: 1
 - Lost records: 0
-- Duplicate deliveries completed: 500
-- Logical pages after duplicate delivery: 10,000
+- Logical pages persisted: 10,000
 
 ## 6. Database Scaling
 
@@ -101,7 +105,8 @@ explicit refresh step.
 
 ## 9. Chaos Testing
 
-The first chaos-style proof is deterministic lease recovery. A fuller suite should add:
+The first chaos-style proof is PostgreSQL lease recovery with stale-completion fencing. A
+fuller suite should add:
 
 - worker death after fetch but before persistence
 - worker death after persistence but before completion ACK

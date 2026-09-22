@@ -1,0 +1,26 @@
+{
+  "timestamp_utc": "2026-09-22T17:45:49.123976+00:00",
+  "run_id": "0f2a716fe48745c1a0fb40e1a8868725",
+  "records": 10000,
+  "scheduled": 10000,
+  "workers": 4,
+  "abandoned_leases": 500,
+  "expired_leases_recovered": 500,
+  "worker_results": {
+    "claimed": 10000,
+    "completed": 10000,
+    "failed": 0,
+    "stale_rejected": 0
+  },
+  "frontier": {
+    "pending": 0,
+    "leased": 0,
+    "complete": 10000,
+    "failed": 0,
+    "dead": 0
+  },
+  "logical_pages": 10000,
+  "lost_records": 0,
+  "stale_completions_rejected": 1,
+  "storage_semantics": "PostgreSQL frontier, at-least-once delivery, fenced leases, idempotent page writes"
+}

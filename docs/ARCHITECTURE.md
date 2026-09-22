@@ -19,26 +19,29 @@ URLs -> API/scheduler -> PostgreSQL crawl_frontier
 
 The original in-process pipeline still uses bounded queues for controlled fixture runs.
 The V2 worker path adds a durable PostgreSQL frontier. Workers claim work with expiring
-leases, so abandoned work can be recovered by another worker after a crash. Page storage
-is idempotent on `normalized_url`, which supports at-least-once delivery without creating
-duplicate logical page records.
+leases and lease tokens, so abandoned work can be recovered by another worker after a
+crash while stale workers are fenced from completing work they no longer own. Page
+storage is idempotent on `normalized_url`, which supports at-least-once delivery without
+creating duplicate logical page records.
 
 Global request rate is controlled by a token bucket, while per-domain concurrency uses
 domain-keyed semaphores.
 
 ## Boundaries
 
-The process can still run as one service for review. The durable frontier now allows a
-deployment to split API submission and worker execution without rewriting parser,
-normalizer, deduplicator, or repository code.
+Docker Compose runs PostgreSQL, the FastAPI control API, and a separate worker process.
+The durable frontier allows API submission and worker execution to remain split without
+rewriting parser, normalizer, deduplicator, or repository code.
 
 ## Frontier Semantics
 
 The frontier is intentionally honest about distributed-system guarantees:
 
 - Delivery is at least once.
-- Each lease has an owner and expiration time.
+- Each lease has an owner, token, and expiration time.
 - Expired leases become claimable by another worker.
+- Completion and failure updates require matching `id`, `lease_owner`, `lease_token`, and
+  `state='leased'`.
 - Failed work is retried until `max_attempts`, then moved to `dead`.
 - Page writes are idempotent on normalized URL.
 
