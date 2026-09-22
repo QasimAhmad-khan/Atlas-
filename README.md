@@ -105,6 +105,30 @@ docs/               architecture, database, pipeline, trade-offs, benchmarks
 
 ## Development
 
+Linux/macOS:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+python -m pytest
+```
+
+One-command local verification and frontier recovery demo:
+
+```bash
+bash scripts/reproduce.sh
+```
+
+Optional Nix shell:
+
+```bash
+nix develop
+```
+
+Windows PowerShell:
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
