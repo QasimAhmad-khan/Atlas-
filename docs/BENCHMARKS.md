@@ -4,6 +4,23 @@ These results were recorded locally on 2026-09-22 with Python 3.13.5 on Windows.
 PostgreSQL 16.15 was run from the official EDB Windows x64 binary archive under
 `C:\atlas\.postgres_runtime` on port `55432`.
 
+## Environment
+
+| Item | Value |
+|---|---|
+| CPU | Intel Core i7-9850H, 6 cores / 12 logical processors |
+| RAM | 34,064,666,624 bytes, about 31.7 GiB |
+| Storage | PC601 NVMe SK hynix 512GB SSD |
+| OS | Windows |
+| Python | 3.13.5 |
+| PostgreSQL | 16.15, portable EDB Windows x64 runtime |
+| PostgreSQL port | 55432 |
+| `shared_buffers` | 128MB |
+| `work_mem` | 4MB |
+| `maintenance_work_mem` | 64MB |
+| `effective_cache_size` | 4GB |
+| `max_connections` | 250 for the high-concurrency pgbench retest |
+
 Raw machine-readable files:
 
 - `benchmarks/results/ingestion_benchmark.json`
@@ -15,16 +32,35 @@ Raw machine-readable files:
 
 ## Ingestion Benchmark
 
-| Records | Concurrency | Elapsed seconds | Records/sec |
-|---:|---:|---:|---:|
-| 100 | 1 | 0.081113 | 1232.84 |
-| 100 | 5 | 0.075522 | 1324.12 |
-| 100 | 10 | 0.077781 | 1285.66 |
-| 1000 | 1 | 0.780026 | 1282.01 |
-| 1000 | 5 | 0.760966 | 1314.12 |
-| 1000 | 10 | 0.781861 | 1279.0 |
+This benchmark uses controlled fixture pages and a synthetic fetcher, so it exercises the
+AtlasPipe software path without hitting public websites: fetch response object creation,
+HTML parsing, URL normalization, hashing, deduplication, batching, and repository writes.
+Latency is measured from fixture fetch start through batch save.
+
+| Records | Concurrency | Elapsed seconds | Records/sec | p50 ms | p95 ms | Peak MB | Failed |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10000 | 1 | 7.630248 | 1310.57 | 186.948 | 356.285 | 105.70 | 0 |
+| 10000 | 5 | 7.369599 | 1356.93 | 181.930 | 345.750 | 105.70 | 0 |
+| 10000 | 10 | 7.738867 | 1292.18 | 187.910 | 356.457 | 107.01 | 0 |
+| 10000 | 25 | 7.598843 | 1315.99 | 180.678 | 347.537 | 107.16 | 0 |
+| 10000 | 50 | 7.340558 | 1362.29 | 179.744 | 344.514 | 106.48 | 0 |
+| 50000 | 1 | 38.646022 | 1293.79 | 186.651 | 355.219 | 252.32 | 0 |
+| 50000 | 5 | 37.626688 | 1328.84 | 181.926 | 346.796 | 252.57 | 0 |
+| 50000 | 10 | 37.511434 | 1332.93 | 181.434 | 346.150 | 253.24 | 0 |
+| 50000 | 25 | 38.105214 | 1312.16 | 183.225 | 348.137 | 251.23 | 0 |
+| 50000 | 50 | 38.139783 | 1310.97 | 184.364 | 350.305 | 252.73 | 0 |
+| 100000 | 1 | 82.182589 | 1216.80 | 195.012 | 370.264 | 432.94 | 0 |
+| 100000 | 5 | 78.959790 | 1266.47 | 188.861 | 357.047 | 431.05 | 0 |
+| 100000 | 10 | 79.667460 | 1255.22 | 188.606 | 357.952 | 433.07 | 0 |
+| 100000 | 25 | 80.362986 | 1244.35 | 189.143 | 359.853 | 433.73 | 0 |
+| 100000 | 50 | 78.260737 | 1277.78 | 186.221 | 353.450 | 431.32 | 0 |
 
 ## Insert Benchmark
+
+The lightweight insert benchmark isolates batching overhead in the in-memory repository.
+It is useful for comparing single-row versus batched write paths inside the application,
+but it should not be interpreted as live PostgreSQL throughput. Live database performance
+is reported separately in the PostgreSQL sections below.
 
 | Records | Mode | Batch size | Insert seconds | Records/sec |
 |---:|---|---:|---:|---:|
@@ -62,7 +98,7 @@ to 2,273 MB.
 | 500000 | copy_records_to_table | 50000 | 28.584251 | 17492.15 |
 | 1000000 | copy_records_to_table | 50000 | 60.274731 | 16590.70 |
 
-Measured query latency averages at 1.822M `pages` rows:
+### Query latency at 1.822M rows
 
 | Query | Avg ms | Min ms | Max ms |
 |---|---:|---:|---:|
@@ -72,12 +108,12 @@ Measured query latency averages at 1.822M `pages` rows:
 | status-code filter | 0.546 | 0.448 | 0.964 |
 | domain aggregate | 720.615 | 665.216 | 954.041 |
 
-`EXPLAIN ANALYZE` still showed a direct index scan for normalized URL lookup with 0.039 ms
+`EXPLAIN ANALYZE` showed a direct index scan for normalized URL lookup with 0.039 ms
 execution time. The domain/recent query used an index scan backward on `ix_pages_created_at`
 and returned 100 rows in 0.080 ms. The domain aggregate became the expensive query, using
 a parallel sequential scan over the 1.8M-row table and completing in 723.389 ms.
 
-Measured query latency averages:
+### Query latency at 122K rows
 
 | Query | Avg ms | Min ms | Max ms |
 |---|---:|---:|---:|

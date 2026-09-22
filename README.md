@@ -9,6 +9,11 @@ The project is designed for data-heavy backend work: the kind of engineering beh
 company, domain, and technographic datasets where freshness, deduplication, schema design,
 rate limits, and query performance matter.
 
+Tested to 1.82M persisted page records with ~16.6K rows/sec PostgreSQL COPY ingestion,
+sub-2 ms indexed URL lookup, and zero failed transactions during a 100-client PostgreSQL
+stress test. Benchmarked locally on PostgreSQL 16; results and methodology are
+reproducible in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
 ## Why This Project
 
 MixRank describes its product as a data platform for company, people, job, app, and
@@ -163,6 +168,16 @@ High-concurrency `pgbench` retest:
 | Failed transactions | 0 |
 | TPS | 4,484.83 |
 | Average latency | 22.223 ms |
+
+Controlled full-pipeline fixture benchmark:
+
+| Test | Result |
+|---|---:|
+| Largest fixture run | 100,000 pages |
+| Concurrency tested | 1 / 5 / 10 / 25 / 50 |
+| Best 100k throughput | 1,277.78 records/sec |
+| 100k p95 latency at best throughput | 353.450 ms |
+| Failures | 0 |
 
 See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for methodology, raw-result file names, and
 query-plan notes.
