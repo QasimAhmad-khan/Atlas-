@@ -73,10 +73,11 @@ class FrontierWorker:
         )
 
     async def run_once(self) -> FrontierWorkerResult:
+        claim_size = min(self._batch_size, self._concurrency)
         async with self._repository_context() as repository:
             leases = await repository.acquire_frontier_batch(
                 owner=self._owner,
-                batch_size=self._batch_size,
+                batch_size=claim_size,
                 lease_seconds=self._lease_seconds,
             )
         if not leases:
@@ -170,11 +171,11 @@ class FrontierWorker:
             return False if accepted else None
 
         async with self._repository_context() as repository:
-            await repository.save_pages([page])
-            accepted = await repository.complete_frontier_item(
-                lease.id,
+            accepted = await repository.save_page_and_complete_frontier_item(
+                item_id=lease.id,
                 lease_owner=lease.lease_owner,
                 lease_token=lease.lease_token,
+                page=page,
             )
         return True if accepted else None
 

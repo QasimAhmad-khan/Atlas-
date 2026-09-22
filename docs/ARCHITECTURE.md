@@ -24,6 +24,10 @@ crash while stale workers are fenced from completing work they no longer own. Pa
 storage is idempotent on `normalized_url`, which supports at-least-once delivery without
 creating duplicate logical page records.
 
+Workers claim no more rows than they can execute concurrently, then replenish on the next
+loop. Successful page persistence and frontier completion are fenced together in one
+transaction: the worker must still own the live lease before page metadata is written.
+
 Global request rate is controlled by a token bucket, while per-domain concurrency uses
 domain-keyed semaphores.
 
@@ -42,6 +46,7 @@ The frontier is intentionally honest about distributed-system guarantees:
 - Expired leases become claimable by another worker.
 - Completion and failure updates require matching `id`, `lease_owner`, `lease_token`, and
   `state='leased'`.
+- Successful page writes are coupled with fenced completion in one transaction.
 - Failed work is retried until `max_attempts`, then moved to `dead`.
 - Page writes are idempotent on normalized URL.
 

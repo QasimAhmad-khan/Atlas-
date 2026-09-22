@@ -53,6 +53,12 @@ Failures retry until `max_attempts`, then move to `dead`. Completion and failure
 are fenced by `lease_owner` and `lease_token`, so a stale worker cannot complete a lease
 that has already expired and been acquired by another worker.
 
+The worker also avoids pre-claiming a large backlog. It claims at most its available
+execution concurrency and then replenishes on the next loop, which reduces the chance
+that queued-but-not-yet-executing work expires before it starts. On success, page
+persistence and frontier completion happen as one fenced transaction; if the lease is
+stale, the page write is skipped.
+
 The PostgreSQL recovery demo scheduled 10,000 records, abandoned 500 leases, expired them
 in PostgreSQL, and ran four SQL-backed workers. Final result:
 

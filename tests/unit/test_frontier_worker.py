@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from atlaspipe.crawler.fetcher import FetchResult
 from atlaspipe.crawler.frontier_worker import FrontierWorker
 from atlaspipe.db.repositories import InMemoryRepository
+from atlaspipe.schemas.page import PageRecord
 
 
 class StableFetcher:
@@ -119,6 +120,63 @@ async def test_frontier_rejects_stale_lease_completion() -> None:
     assert stale_completion is False
     assert valid_completion is True
     assert stats.complete == 1
+
+
+async def test_stale_lease_cannot_persist_page_before_rejected_completion() -> None:
+    repository = InMemoryRepository.empty()
+    job = await repository.create_job(["https://example.com/a"])
+    await repository.schedule_frontier_urls(job_id=job.id, urls=job.requested_urls)
+    stale = (
+        await repository.acquire_frontier_batch(
+            owner="worker-1",
+            batch_size=1,
+            lease_seconds=30,
+        )
+    )[0]
+    repository.frontier[stale.id]["lease_expires_at"] = datetime.now(UTC) - timedelta(seconds=1)
+    await repository.acquire_frontier_batch(
+        owner="worker-2",
+        batch_size=1,
+        lease_seconds=30,
+    )
+
+    accepted = await repository.save_page_and_complete_frontier_item(
+        item_id=stale.id,
+        lease_owner=stale.lease_owner,
+        lease_token=stale.lease_token,
+        page=PageRecord(
+            url=stale.url,
+            normalized_url=stale.normalized_url,
+            domain=stale.domain,
+            http_status=200,
+        ),
+    )
+
+    _pages, total_pages = await repository.list_pages(limit=10, offset=0)
+    assert accepted is False
+    assert total_pages == 0
+
+
+async def test_frontier_worker_claims_only_execution_slots_per_pass() -> None:
+    repository = InMemoryRepository.empty()
+    urls = [f"https://example.com/{index}" for index in range(25)]
+    job = await repository.create_job(urls)
+    await repository.schedule_frontier_urls(job_id=job.id, urls=job.requested_urls)
+    worker = FrontierWorker(
+        owner="worker-1",
+        repository=repository,
+        fetcher=StableFetcher(),
+        batch_size=100,
+        lease_seconds=30,
+        concurrency=10,
+    )
+
+    result = await worker.run_once()
+
+    stats = await repository.frontier_stats(job_id=job.id)
+    assert result.claimed == 10
+    assert result.completed == 10
+    assert stats.pending == 15
 
 
 async def test_frontier_worker_persists_pages_and_marks_work_complete() -> None:

@@ -87,6 +87,15 @@ class PageRepository(Protocol):
 
     async def save_pages(self, pages: list[PageRecord]) -> int: ...
 
+    async def save_page_and_complete_frontier_item(
+        self,
+        *,
+        item_id: int,
+        lease_owner: str,
+        lease_token: str,
+        page: PageRecord,
+    ) -> bool: ...
+
     async def stats(self) -> StatsResponse: ...
 
     async def domain_stats(self) -> list[DomainStats]: ...
@@ -326,6 +335,7 @@ class SqlAlchemyRepository(Repository):
                 CrawlFrontierItem.state == "leased",
                 CrawlFrontierItem.lease_owner == lease_owner,
                 CrawlFrontierItem.lease_token == lease_token,
+                CrawlFrontierItem.lease_expires_at > now,
             )
             .values(
                 state="complete",
@@ -338,6 +348,39 @@ class SqlAlchemyRepository(Repository):
         )
         await self._session.flush()
         return bool(_rowcount(result))
+
+    async def save_page_and_complete_frontier_item(
+        self,
+        *,
+        item_id: int,
+        lease_owner: str,
+        lease_token: str,
+        page: PageRecord,
+    ) -> bool:
+        now = datetime.now(UTC)
+        item = await self._session.scalar(
+            select(CrawlFrontierItem)
+            .where(
+                CrawlFrontierItem.id == item_id,
+                CrawlFrontierItem.state == "leased",
+                CrawlFrontierItem.lease_owner == lease_owner,
+                CrawlFrontierItem.lease_token == lease_token,
+                CrawlFrontierItem.lease_expires_at > now,
+            )
+            .with_for_update()
+        )
+        if item is None:
+            return False
+
+        await self.save_pages([page])
+        item.state = "complete"
+        item.lease_owner = None
+        item.lease_token = None
+        item.lease_expires_at = None
+        item.completed_at = now
+        item.updated_at = now
+        await self._session.flush()
+        return True
 
     async def fail_frontier_item(
         self,
@@ -356,6 +399,7 @@ class SqlAlchemyRepository(Repository):
                 CrawlFrontierItem.state == "leased",
                 CrawlFrontierItem.lease_owner == lease_owner,
                 CrawlFrontierItem.lease_token == lease_token,
+                CrawlFrontierItem.lease_expires_at > datetime.now(UTC),
             )
             .with_for_update()
         )
@@ -669,8 +713,34 @@ class InMemoryRepository:
             item["state"] != "leased"
             or item["lease_owner"] != lease_owner
             or item["lease_token"] != lease_token
+            or not _lease_is_unexpired(item)
         ):
             return False
+        item["state"] = "complete"
+        item["lease_owner"] = None
+        item["lease_token"] = None
+        item["lease_expires_at"] = None
+        return True
+
+    async def save_page_and_complete_frontier_item(
+        self,
+        *,
+        item_id: int,
+        lease_owner: str,
+        lease_token: str,
+        page: PageRecord,
+    ) -> bool:
+        item = self.frontier.get(item_id)
+        if item is None:
+            return False
+        if (
+            item["state"] != "leased"
+            or item["lease_owner"] != lease_owner
+            or item["lease_token"] != lease_token
+            or not _lease_is_unexpired(item)
+        ):
+            return False
+        await self.save_pages([page])
         item["state"] = "complete"
         item["lease_owner"] = None
         item["lease_token"] = None
@@ -694,6 +764,7 @@ class InMemoryRepository:
             item["state"] != "leased"
             or item["lease_owner"] != lease_owner
             or item["lease_token"] != lease_token
+            or not _lease_is_unexpired(item)
         ):
             return False
         should_retry = item["attempt_count"] < item["max_attempts"]
@@ -750,3 +821,8 @@ def _in_memory_item_is_due(item: InMemoryFrontierItem, now: datetime) -> bool:
         lease_expires_at = item["lease_expires_at"]
         return lease_expires_at is not None and lease_expires_at < now
     return False
+
+
+def _lease_is_unexpired(item: InMemoryFrontierItem) -> bool:
+    lease_expires_at = item["lease_expires_at"]
+    return lease_expires_at is not None and lease_expires_at > datetime.now(UTC)
