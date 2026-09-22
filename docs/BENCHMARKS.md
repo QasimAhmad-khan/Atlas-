@@ -1,13 +1,15 @@
 # Benchmarks
 
-These results were generated locally on 2026-09-22 with Python 3.13.5 on Windows. Docker
-and PostgreSQL were unavailable, so these are deterministic in-memory pipeline and
-repository benchmarks, not live PostgreSQL benchmarks.
+These results were generated locally on 2026-09-22 with Python 3.13.5 on Windows.
+PostgreSQL 16.15 was run from the official EDB Windows x64 binary archive under
+`C:\atlas\.postgres_runtime` on port `55432`.
 
 Raw machine-readable files:
 
 - `benchmarks/results/ingestion_benchmark.json`
 - `benchmarks/results/database_benchmark.json`
+- `benchmarks/results/postgres_stress_benchmark.json`
+- `benchmarks/results/pgbench_run.txt`
 
 ## Ingestion Benchmark
 
@@ -31,8 +33,50 @@ Raw machine-readable files:
 | 10000 | single_row | 1 | 4.930653 | 2028.13 |
 | 10000 | batch | 100 | 0.114415 | 87401.05 |
 
+## Live PostgreSQL Stress Benchmark
+
+The live PostgreSQL stress benchmark inserted synthetic `pages` records through asyncpg
+against the migrated AtlasPipe schema. After the run, the `pages` table contained 122,000
+rows and the database size was 113 MB.
+
+| Records | Mode | Batch size | Elapsed seconds | Records/sec |
+|---:|---|---:|---:|---:|
+| 1000 | single_row | 1 | 0.357434 | 2797.72 |
+| 1000 | batch_executemany | 500 | 0.183533 | 5448.62 |
+| 10000 | single_row | 1 | 3.624259 | 2759.18 |
+| 10000 | batch_executemany | 500 | 1.276222 | 7835.63 |
+| 50000 | single_row | 1 | 17.025987 | 2936.69 |
+| 50000 | batch_executemany | 500 | 5.802174 | 8617.46 |
+
+Measured query latency averages:
+
+| Query | Avg ms | Min ms | Max ms |
+|---|---:|---:|---:|
+| lookup by normalized URL | 0.642 | 0.440 | 1.417 |
+| filter by domain | 24.592 | 23.720 | 27.386 |
+| recent pages | 0.450 | 0.322 | 0.806 |
+| status-code filter | 0.608 | 0.514 | 0.974 |
+| domain aggregate | 50.674 | 44.204 | 68.201 |
+
+`EXPLAIN ANALYZE` confirmed an index scan on `ix_pages_normalized_url` for URL lookup
+with 0.035 ms execution time. Domain filtering used `ix_pages_domain`, scanned 50,000
+matching rows, sorted by `created_at`, and completed in 25.410 ms.
+
+## pgbench Transaction Stress
+
+`pgbench` initialized scale factor 5, generating 500,000 account rows, then ran 20 clients
+and 4 threads for 30 seconds.
+
+| Metric | Value |
+|---|---:|
+| Transactions processed | 138091 |
+| Failed transactions | 0 |
+| TPS | 4664.980543 |
+| Average latency | 4.278 ms |
+| Latency stddev | 3.477 ms |
+| Initial connection time | 409.112 ms |
+
 ## Limitations
 
-These numbers measure local Python pipeline overhead and repository behavior. They should
-not be presented as PostgreSQL throughput. Live database benchmarks should be rerun once
-Docker or PostgreSQL is available.
+These numbers come from a local Windows portable PostgreSQL runtime rather than Docker
+Compose. Docker verification remains separate.

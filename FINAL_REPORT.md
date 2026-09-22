@@ -20,8 +20,9 @@ deduplication, retry logic, rate limiting, and URL safety validation.
 ## Benchmark Summary
 
 Synthetic ingestion benchmark: best measured local run was 1,324.12 records/sec for 100
-records at concurrency 5. In-memory insert benchmark: 10,000 records improved from
-2,028.13 records/sec single-row writes to 87,401.05 records/sec with batch size 100.
+records at concurrency 5. Live PostgreSQL insertion reached 8,617.46 records/sec for
+50,000 rows with batch `executemany`, compared with 2,936.69 records/sec single-row.
+`pgbench` processed 138,091 transactions in 30 seconds with zero failures at 4,664.98 TPS.
 
 ## Failure Scenarios Tested
 
@@ -37,9 +38,9 @@ remote content.
 
 ## Known Limitations
 
-Live PostgreSQL migration, Docker Compose startup, and EXPLAIN ANALYZE verification could
-not be run because Docker, PostgreSQL, and `psql` are not installed or reachable in this
-environment.
+Docker Compose startup could not be run because Docker is not installed. PostgreSQL was
+installed as a portable runtime under `C:\atlas\.postgres_runtime`, migrated successfully,
+and stress-tested on port `55432`.
 
 ## Strongest Engineering Aspects
 

@@ -2,8 +2,9 @@
 
 ## Current checkpoint
 
-Whole-project build substantially implemented. Live PostgreSQL/Docker verification remains
-blocked by missing local system tools.
+Whole-project build substantially implemented. Live PostgreSQL verification completed
+with a portable PostgreSQL 16.15 runtime. Docker verification remains blocked because
+Docker is not installed.
 
 ## Completed work
 
@@ -28,6 +29,10 @@ blocked by missing local system tools.
   benchmark tooling.
 - Executed deterministic local benchmarks and recorded JSON results.
 - Refreshed the completed project into `C:\atlas`.
+- Installed portable PostgreSQL 16.15 under `C:\atlas\.postgres_runtime`.
+- Started PostgreSQL on `localhost:55432`, created AtlasPipe databases, and applied
+  Alembic migrations successfully.
+- Executed live PostgreSQL insert/query/EXPLAIN stress benchmark and `pgbench`.
 
 ## Checkpoint 0 acceptance
 
@@ -53,6 +58,9 @@ blocked by missing local system tools.
 - `python -m alembic upgrade head`
 - `python benchmarks/ingestion_benchmark.py`
 - `python benchmarks/database_benchmark.py`
+- `python benchmarks/postgres_stress_benchmark.py`
+- `pgbench -h localhost -p 55432 -U atlaspipe -i -s 5 atlaspipe`
+- `pgbench -h localhost -p 55432 -U atlaspipe -c 20 -j 4 -T 30 -P 10 atlaspipe`
 
 ## Test result
 
@@ -68,10 +76,12 @@ blocked by missing local system tools.
 - Alembic head discovered: `20260922_0001`.
 - Offline migration SQL generation passed and produced PostgreSQL DDL for expected
   tables, constraints, and indexes.
-- Online migration failed because PostgreSQL is not reachable:
-  `ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection`.
+- Online migration passed against PostgreSQL 16.15 on `localhost:55432`.
 - Ingestion benchmark completed for 100 and 1,000 record scales.
 - Database-style in-memory benchmark completed for 100, 1,000, and 10,000 record scales.
+- Live PostgreSQL stress inserted 122,000 total `pages` rows.
+- `pgbench` processed 138,091 transactions in 30 seconds with zero failed transactions
+  and 4,664.980543 TPS.
 
 ## Checkpoint 1 acceptance
 

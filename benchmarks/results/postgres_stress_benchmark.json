@@ -1,0 +1,91 @@
+{
+  "database_url": "postgresql://atlaspipe:atlaspipe@localhost:55432/atlaspipe",
+  "run_id": "3ff2c9062b",
+  "total_pages_after_run": 122000,
+  "insert_results": [
+    {
+      "mode": "single_row",
+      "records": 1000,
+      "elapsed_seconds": 0.357434,
+      "records_per_second": 2797.72
+    },
+    {
+      "mode": "batch_executemany",
+      "records": 1000,
+      "batch_size": 500,
+      "elapsed_seconds": 0.183533,
+      "records_per_second": 5448.62
+    },
+    {
+      "mode": "single_row",
+      "records": 10000,
+      "elapsed_seconds": 3.624259,
+      "records_per_second": 2759.18
+    },
+    {
+      "mode": "batch_executemany",
+      "records": 10000,
+      "batch_size": 500,
+      "elapsed_seconds": 1.276222,
+      "records_per_second": 7835.63
+    },
+    {
+      "mode": "single_row",
+      "records": 50000,
+      "elapsed_seconds": 17.025987,
+      "records_per_second": 2936.69
+    },
+    {
+      "mode": "batch_executemany",
+      "records": 50000,
+      "batch_size": 500,
+      "elapsed_seconds": 5.802174,
+      "records_per_second": 8617.46
+    }
+  ],
+  "query_results": {
+    "lookup_by_normalized_url": {
+      "avg_ms": 0.642,
+      "min_ms": 0.44,
+      "max_ms": 1.417
+    },
+    "filter_by_domain": {
+      "avg_ms": 24.592,
+      "min_ms": 23.72,
+      "max_ms": 27.386
+    },
+    "recent_pages": {
+      "avg_ms": 0.45,
+      "min_ms": 0.322,
+      "max_ms": 0.806
+    },
+    "status_code_filter": {
+      "avg_ms": 0.608,
+      "min_ms": 0.514,
+      "max_ms": 0.974
+    },
+    "domain_aggregate": {
+      "avg_ms": 50.674,
+      "min_ms": 44.204,
+      "max_ms": 68.201
+    }
+  },
+  "explain_analyze": {
+    "lookup_by_normalized_url": [
+      "Index Scan using ix_pages_normalized_url on pages  (cost=0.41..8.43 rows=1 width=24) (actual time=0.022..0.022 rows=1 loops=1)",
+      "  Index Cond: (normalized_url = 'https://stress-3ff2c9062b-batch-50000.example/page-25000'::text)",
+      "Planning Time: 0.131 ms",
+      "Execution Time: 0.035 ms"
+    ],
+    "filter_by_domain": [
+      "Limit  (cost=7.92..7.93 rows=1 width=16) (actual time=25.377..25.388 rows=100 loops=1)",
+      "  ->  Sort  (cost=7.92..7.93 rows=1 width=16) (actual time=25.375..25.380 rows=100 loops=1)",
+      "        Sort Key: created_at DESC",
+      "        Sort Method: top-N heapsort  Memory: 28kB",
+      "        ->  Index Scan using ix_pages_domain on pages  (cost=0.29..7.91 rows=1 width=16) (actual time=0.023..19.322 rows=50000 loops=1)",
+      "              Index Cond: ((domain)::text = 'stress-3ff2c9062b-batch-50000.example'::text)",
+      "Planning Time: 0.131 ms",
+      "Execution Time: 25.410 ms"
+    ]
+  }
+}
