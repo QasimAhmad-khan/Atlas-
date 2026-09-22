@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import Protocol
+from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atlaspipe.crawler.fetcher import FetchResult
+from atlaspipe.crawler.rate_limiter import DomainConcurrencyLimiter, TokenBucketRateLimiter
+from atlaspipe.crawler.retry import RetryPolicy, retry_after_seconds, should_retry_status
 from atlaspipe.db.repositories import FrontierLease, PageRepository, SqlAlchemyRepository
 from atlaspipe.parsing.html_parser import HtmlMetadataParser
 from atlaspipe.pipeline.pipeline import page_from_fetch_result
@@ -40,6 +44,9 @@ class FrontierWorker:
         batch_size: int,
         lease_seconds: int,
         concurrency: int,
+        per_domain_concurrency: int = 100,
+        requests_per_second: float = 1_000,
+        retry_policy: RetryPolicy | None = None,
     ) -> None:
         if (repository is None) == (repository_context_factory is None):
             raise ValueError("provide exactly one of repository or repository_context_factory")
@@ -50,6 +57,9 @@ class FrontierWorker:
         self._batch_size = batch_size
         self._lease_seconds = lease_seconds
         self._concurrency = concurrency
+        self._rate_limiter = TokenBucketRateLimiter(requests_per_second)
+        self._domain_limiter = DomainConcurrencyLimiter(per_domain_concurrency)
+        self._retry_policy = retry_policy or RetryPolicy(max_retries=0)
         self._parser = HtmlMetadataParser()
 
     @classmethod
@@ -62,6 +72,9 @@ class FrontierWorker:
         batch_size: int,
         lease_seconds: int,
         concurrency: int,
+        per_domain_concurrency: int = 100,
+        requests_per_second: float = 1_000,
+        retry_policy: RetryPolicy | None = None,
     ) -> FrontierWorker:
         return cls(
             owner=owner,
@@ -70,6 +83,9 @@ class FrontierWorker:
             batch_size=batch_size,
             lease_seconds=lease_seconds,
             concurrency=concurrency,
+            per_domain_concurrency=per_domain_concurrency,
+            requests_per_second=requests_per_second,
+            retry_policy=retry_policy,
         )
 
     async def run_once(self) -> FrontierWorkerResult:
@@ -143,7 +159,7 @@ class FrontierWorker:
             return await self._process(lease)
 
     async def _process(self, lease: FrontierLease) -> bool | None:
-        result = await self._fetcher.fetch(lease.url)
+        result = await self._fetch_with_retries(lease.url)
         if result.error_type is not None:
             async with self._repository_context() as repository:
                 accepted = await repository.fail_frontier_item(
@@ -152,7 +168,24 @@ class FrontierWorker:
                     lease_token=lease.lease_token,
                     error_type=result.error_type,
                     error_message=result.error_message or "",
-                    retry_after_seconds=0,
+                    retry_after_seconds=math.ceil(self._retry_delay_for_result(result, 0)),
+                )
+            return False if accepted else None
+
+        if should_retry_status(result.status):
+            async with self._repository_context() as repository:
+                accepted = await repository.fail_frontier_item(
+                    lease.id,
+                    lease_owner=lease.lease_owner,
+                    lease_token=lease.lease_token,
+                    error_type="TransientHttpStatus",
+                    error_message=f"HTTP {result.status}",
+                    retry_after_seconds=math.ceil(
+                        self._retry_delay_for_result(
+                            result,
+                            self._retry_policy.max_retries + 1,
+                        )
+                    ),
                 )
             return False if accepted else None
 
@@ -178,6 +211,27 @@ class FrontierWorker:
                 page=page,
             )
         return True if accepted else None
+
+    async def _fetch_with_retries(self, url: str) -> FetchResult:
+        result: FetchResult | None = None
+        for attempt in range(1, self._retry_policy.max_retries + 2):
+            domain = urlsplit(url).hostname or ""
+            await self._rate_limiter.acquire()
+            async with self._domain_limiter.limit(domain):
+                result = await self._fetcher.fetch(url)
+            if result.error_type is None and not should_retry_status(result.status):
+                return result
+            if attempt <= self._retry_policy.max_retries:
+                await asyncio.sleep(self._retry_delay_for_result(result, attempt))
+        if result is None:
+            raise RuntimeError("fetch retry loop produced no result")
+        return result
+
+    def _retry_delay_for_result(self, result: FetchResult, attempt: int) -> float:
+        header_delay = retry_after_seconds(result.headers.get("retry-after"))
+        if header_delay is not None:
+            return float(header_delay)
+        return self._retry_policy.delay_for_attempt(attempt)
 
     @asynccontextmanager
     async def _repository_context(self) -> AsyncIterator[PageRepository]:

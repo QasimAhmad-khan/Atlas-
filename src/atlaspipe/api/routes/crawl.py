@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from atlaspipe.api.dependencies import repository_dependency
 from atlaspipe.db.repositories import PageRepository
+from atlaspipe.pipeline.validation import validate_public_url
 from atlaspipe.schemas.crawl import CrawlJobResponse, CrawlRequest
 
 router = APIRouter(tags=["crawl"])
@@ -16,6 +17,13 @@ async def create_crawl(
     repository: PageRepository = RepositoryDependency,
 ) -> CrawlJobResponse:
     urls = [str(url) for url in request.urls]
+    for url in urls:
+        validation = validate_public_url(url)
+        if not validation.is_valid:
+            raise HTTPException(
+                status_code=422,
+                detail={"url": url, "reason": validation.reason},
+            )
     job = await repository.create_job(urls)
     await repository.schedule_frontier_urls(job_id=job.id, urls=urls)
     return job
@@ -28,7 +36,5 @@ async def get_job(
 ) -> CrawlJobResponse:
     job = await repository.get_job(job_id)
     if job is None:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="job not found")
     return job

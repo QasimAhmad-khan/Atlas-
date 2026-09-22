@@ -7,6 +7,22 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: atlaspipe
+          POSTGRES_PASSWORD: atlaspipe
+          POSTGRES_DB: atlaspipe
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U atlaspipe -d atlaspipe"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,5 +38,7 @@ jobs:
         run: python -m ruff format --check .
       - name: Type check
         run: python -m mypy
+      - name: Migrate PostgreSQL
+        run: python -m alembic upgrade head
       - name: Tests
         run: python -m pytest

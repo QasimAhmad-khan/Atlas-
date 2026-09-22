@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import ipaddress
+import socket
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -42,5 +44,47 @@ def validate_public_url(url: str, *, allow_private: bool = False) -> UrlValidati
         or ip.is_unspecified
     ):
         return UrlValidationResult(False, "non_public_ip")
+
+    return UrlValidationResult(True)
+
+
+async def validate_resolved_public_url(
+    url: str,
+    *,
+    allow_private: bool = False,
+) -> UrlValidationResult:
+    basic = validate_public_url(url, allow_private=allow_private)
+    if not basic.is_valid:
+        return basic
+
+    host = urlsplit(url.strip()).hostname
+    if host is None:
+        return UrlValidationResult(False, "missing_host")
+
+    try:
+        addresses = await asyncio.to_thread(socket.getaddrinfo, host, None)
+    except socket.gaierror:
+        return UrlValidationResult(False, "dns_resolution_failed")
+
+    resolved_ips = {
+        ipaddress.ip_address(address[-1][0])
+        for address in addresses
+        if address and address[-1] and address[-1][0]
+    }
+    if not resolved_ips:
+        return UrlValidationResult(False, "dns_resolution_empty")
+
+    for ip in resolved_ips:
+        if ip in BLOCKED_IPS:
+            return UrlValidationResult(False, "metadata_ip")
+        if not allow_private and (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return UrlValidationResult(False, "non_public_resolved_ip")
 
     return UrlValidationResult(True)

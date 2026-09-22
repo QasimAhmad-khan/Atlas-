@@ -9,6 +9,7 @@ from uuid import uuid4
 from atlaspipe.config import get_settings
 from atlaspipe.crawler.fetcher import AioHttpFetcher
 from atlaspipe.crawler.frontier_worker import FrontierWorker
+from atlaspipe.crawler.retry import RetryPolicy
 from atlaspipe.db.session import create_engine, create_session_factory
 from atlaspipe.observability.logging import configure_logging
 
@@ -35,6 +36,9 @@ async def run_worker() -> None:
                 batch_size=settings.batch_size,
                 lease_seconds=settings.frontier_lease_seconds,
                 concurrency=settings.max_concurrency,
+                per_domain_concurrency=settings.per_domain_concurrency,
+                requests_per_second=settings.requests_per_second,
+                retry_policy=RetryPolicy(max_retries=settings.max_retries),
             )
             await worker.run_continuously(
                 stop_event=stop_event,

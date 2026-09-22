@@ -16,6 +16,11 @@ def test_health_and_crawl_job_endpoints() -> None:
         health = client.get("/health")
         assert health.status_code == 200
         assert health.json()["status"] == "healthy"
+        ready = client.get("/ready")
+        assert ready.status_code == 200
+        assert ready.json()["status"] == "healthy"
+        live = client.get("/live")
+        assert live.status_code == 200
 
         created = client.post("/crawl", json={"urls": ["https://example.com"]})
         assert created.status_code == 202
@@ -27,6 +32,9 @@ def test_health_and_crawl_job_endpoints() -> None:
         fetched = client.get("/jobs/1")
         assert fetched.status_code == 200
         assert fetched.json()["id"] == 1
+
+        unsafe = client.post("/crawl", json={"urls": ["http://127.0.0.1:8000"]})
+        assert unsafe.status_code == 422
 
 
 def test_pages_filtering_pagination_and_stats() -> None:

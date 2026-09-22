@@ -29,7 +29,10 @@ loop. Successful page persistence and frontier completion are fenced together in
 transaction: the worker must still own the live lease before page metadata is written.
 
 Global request rate is controlled by a token bucket, while per-domain concurrency uses
-domain-keyed semaphores.
+domain-keyed semaphores. The worker retries transient HTTP statuses (`429`, `500`,
+`502`, `503`, `504`) with exponential backoff and honors `Retry-After` when present.
+Network fetches validate DNS-resolved targets and each redirect hop before requesting the
+next URL, so redirects to private or metadata addresses are blocked.
 
 ## Boundaries
 

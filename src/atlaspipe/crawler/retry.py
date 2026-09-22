@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 
 TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 
@@ -12,6 +14,26 @@ def should_retry_status(status: int | None) -> bool:
 
 def should_retry_error(error: BaseException) -> bool:
     return isinstance(error, (TimeoutError, ConnectionError, OSError))
+
+
+def retry_after_seconds(value: str | None) -> int | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    try:
+        return max(int(stripped), 0)
+    except ValueError:
+        pass
+
+    try:
+        parsed = parsedate_to_datetime(stripped)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return max(int((parsed - datetime.now(UTC)).total_seconds()), 0)
 
 
 @dataclass(frozen=True)

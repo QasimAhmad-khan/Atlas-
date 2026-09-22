@@ -177,6 +177,8 @@ $env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atla
 
 ```powershell
 curl http://localhost:8000/health
+curl http://localhost:8000/live
+curl http://localhost:8000/ready
 curl -X POST http://localhost:8000/crawl -H "Content-Type: application/json" -d "{\"urls\":[\"https://example.com\"]}"
 curl "http://localhost:8000/pages?limit=25&domain=example.com"
 curl http://localhost:8000/stats
@@ -253,16 +255,18 @@ The deterministic test suite covers:
 - link classification
 - hashing and deduplication
 - durable frontier scheduling, lease recovery, and retry exhaustion
-- retry classification
+- retry classification, `Retry-After`, and transient HTTP status handling
 - domain concurrency limiting
-- URL safety validation
+- URL safety validation, including private-address rejection
+- PostgreSQL frontier fencing integration when `DATABASE_URL` is configured
 - API health, crawl job, page, domain, and stats endpoints
 - fixture-driven end-to-end pipeline behavior
 
 Latest local verification:
 
 ```text
-27 tests passed
+31 tests passed, 1 PostgreSQL integration test skipped without DATABASE_URL
+PostgreSQL integration test passed locally with DATABASE_URL
 ruff passed
 ruff format --check passed
 mypy passed
@@ -272,6 +276,8 @@ mypy passed
 
 - The durable frontier uses at-least-once delivery with idempotent page writes. AtlasPipe
   does not claim exactly-once execution.
+- Workers enforce global RPS and per-domain concurrency limits, retry transient HTTP
+  statuses with backoff, and revalidate DNS-resolved URLs and redirects before fetching.
 - Exact hash and URL deduplication are cheap and deterministic; near-duplicate comparison
   is optional because it is more expensive and subjective.
 - PostgreSQL is a good fit for URL lookup, domain filtering, job accounting, attempts,
@@ -286,6 +292,7 @@ mypy passed
 - `/crawl` creates a job and schedules URLs into the durable frontier. Docker Compose now
   runs a separate worker process; production deployment would still need a real
   supervisor and multiple worker replicas.
+- CI runs PostgreSQL 16 and applies Alembic migrations before the test suite.
 - Domain aggregates became expensive at million-row scale; AtlasPipe now includes a
   measured `domain_stats` rollup path. A production system would need a freshness policy.
 - Docker Compose assets are included, but the high-volume benchmark was run against a

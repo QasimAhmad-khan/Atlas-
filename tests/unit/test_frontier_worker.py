@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from atlaspipe.crawler.fetcher import FetchResult
 from atlaspipe.crawler.frontier_worker import FrontierWorker
+from atlaspipe.crawler.retry import RetryPolicy
 from atlaspipe.db.repositories import InMemoryRepository
 from atlaspipe.schemas.page import PageRecord
 
@@ -38,6 +39,24 @@ class FailingFetcher:
             error_type="FixtureFailure",
             error_message="forced failure",
         )
+
+
+class TransientThenStableFetcher:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def fetch(self, url: str) -> FetchResult:
+        self.calls += 1
+        if self.calls == 1:
+            return FetchResult(
+                url=url,
+                final_url=url,
+                status=503,
+                headers={"content-type": "text/html", "retry-after": "0"},
+                body=b"temporarily unavailable",
+                response_time_ms=5,
+            )
+        return await StableFetcher().fetch(url)
 
 
 async def test_frontier_schedules_unique_urls_per_job() -> None:
@@ -218,6 +237,7 @@ async def test_duplicate_delivery_still_produces_one_logical_page() -> None:
         batch_size=10,
         lease_seconds=30,
         concurrency=1,
+        retry_policy=RetryPolicy(max_retries=0, base_delay_seconds=0, max_delay_seconds=0),
     )
 
     await worker.run_once()
@@ -229,6 +249,7 @@ async def test_duplicate_delivery_still_produces_one_logical_page() -> None:
         batch_size=10,
         lease_seconds=30,
         concurrency=1,
+        retry_policy=RetryPolicy(max_retries=0, base_delay_seconds=0, max_delay_seconds=0),
     )
     await duplicate_worker.run_once()
 
@@ -252,6 +273,7 @@ async def test_frontier_worker_retries_then_dead_letters_failures() -> None:
         batch_size=10,
         lease_seconds=30,
         concurrency=1,
+        retry_policy=RetryPolicy(max_retries=0, base_delay_seconds=0, max_delay_seconds=0),
     )
 
     first = await worker.run_once()
@@ -261,3 +283,27 @@ async def test_frontier_worker_retries_then_dead_letters_failures() -> None:
     assert first.failed == 1
     assert second.failed == 1
     assert stats.dead == 1
+
+
+async def test_frontier_worker_retries_transient_http_status_before_completion() -> None:
+    repository = InMemoryRepository.empty()
+    job = await repository.create_job(["https://example.com/retry"])
+    await repository.schedule_frontier_urls(job_id=job.id, urls=job.requested_urls)
+    fetcher = TransientThenStableFetcher()
+    worker = FrontierWorker(
+        owner="worker-1",
+        repository=repository,
+        fetcher=fetcher,
+        batch_size=10,
+        lease_seconds=30,
+        concurrency=1,
+        retry_policy=RetryPolicy(max_retries=1, base_delay_seconds=0, jitter_seconds=0),
+    )
+
+    result = await worker.run_once()
+
+    stats = await repository.frontier_stats(job_id=job.id)
+    assert fetcher.calls == 2
+    assert result.completed == 1
+    assert result.failed == 0
+    assert stats.complete == 1

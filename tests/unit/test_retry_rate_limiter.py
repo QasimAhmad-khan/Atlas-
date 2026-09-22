@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from atlaspipe.crawler.rate_limiter import DomainConcurrencyLimiter
-from atlaspipe.crawler.retry import RetryPolicy, should_retry_status
+from atlaspipe.crawler.retry import RetryPolicy, retry_after_seconds, should_retry_status
 
 
 def test_retry_classifier_retries_transient_statuses_only() -> None:
@@ -17,6 +17,10 @@ def test_retry_classifier_retries_transient_statuses_only() -> None:
 def test_retry_policy_delay_grows() -> None:
     policy = RetryPolicy(jitter_seconds=0)
     assert policy.delay_for_attempt(2) > policy.delay_for_attempt(1)
+
+
+def test_retry_after_seconds_parses_delta_seconds() -> None:
+    assert retry_after_seconds("12") == 12
 
 
 @pytest.mark.asyncio
