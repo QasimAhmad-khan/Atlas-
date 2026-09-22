@@ -40,3 +40,27 @@ Alternatives considered: Direct `os.environ` reads or a hand-written config load
 
 Trade-off: This adds one small dependency, but it avoids duplicated parsing logic and
 makes invalid configuration fail early.
+
+## Decision: Model relational crawl data in PostgreSQL tables
+
+Reason: The project needs indexed URL lookup, domain filtering, crawl job accounting,
+attempt history, and link traversal. Explicit relational tables make those access
+patterns visible and testable.
+
+Alternatives considered: Storing each crawled page as a JSON document in one table.
+
+Trade-off: Relational modeling takes more schema design up front, but it produces
+clearer constraints, better query plans, and stronger portfolio evidence for SQL and
+data modeling.
+
+## Decision: Use normalized URL uniqueness plus content-hash indexing
+
+Reason: URL deduplication and content deduplication are separate concerns. A unique
+normalized URL prevents repeated ingestion of the same address, while a content-hash
+index supports finding different URLs with identical payloads.
+
+Alternatives considered: Unique content hash only, or no uniqueness constraints until
+pipeline-level deduplication.
+
+Trade-off: URL uniqueness is strict and easy to enforce. Content hashes remain indexed
+but not unique because distinct pages can legitimately share the same content.
