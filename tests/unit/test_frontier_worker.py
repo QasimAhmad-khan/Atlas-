@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 from atlaspipe.crawler.fetcher import FetchResult
@@ -56,6 +57,12 @@ class TransientThenStableFetcher:
                 body=b"temporarily unavailable",
                 response_time_ms=5,
             )
+        return await StableFetcher().fetch(url)
+
+
+class SlowFetcher:
+    async def fetch(self, url: str) -> FetchResult:
+        await asyncio.sleep(1.2)
         return await StableFetcher().fetch(url)
 
 
@@ -138,6 +145,28 @@ async def test_frontier_rejects_stale_lease_completion() -> None:
     stats = await repository.frontier_stats(job_id=job.id)
     assert stale_completion is False
     assert valid_completion is True
+    assert stats.complete == 1
+
+
+async def test_frontier_renews_live_lease_for_long_fetch() -> None:
+    repository = InMemoryRepository.empty()
+    job = await repository.create_job(["https://example.com/slow"])
+    await repository.schedule_frontier_urls(job_id=job.id, urls=job.requested_urls)
+    worker = FrontierWorker(
+        owner="worker-1",
+        repository=repository,
+        fetcher=SlowFetcher(),
+        batch_size=1,
+        lease_seconds=1,
+        concurrency=1,
+        lease_renewal_interval_seconds=0.2,
+    )
+
+    result = await worker.run_once()
+
+    stats = await repository.frontier_stats(job_id=job.id)
+    assert result.completed == 1
+    assert result.stale_rejected == 0
     assert stats.complete == 1
 
 

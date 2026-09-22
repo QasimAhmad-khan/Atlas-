@@ -115,6 +115,30 @@ by a failed worker became claimable after lease expiration, SQL-backed workers c
 the records through short transactions, and an old worker's stale completion was rejected
 by `lease_owner` + `lease_token` fencing.
 
+## PostgreSQL Worker-Death Demo
+
+This experiment uses real worker processes rather than manual lease timestamp changes.
+It starts a local HTTP fixture server, schedules PostgreSQL frontier work, launches
+independent `atlaspipe.worker` processes, kills one worker while it owns live leases, and
+then waits for those leases to expire naturally. The remaining workers must reclaim the
+abandoned items and account for every scheduled record.
+
+Command:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atlaspipe'
+.\.venv\Scripts\python scripts\postgres_worker_death_demo.py --records 100000 --workers 4
+```
+
+Raw output is written to:
+
+```text
+benchmarks/results/postgres_worker_death_demo.json
+```
+
+The script also saves per-process worker logs under
+`benchmarks/results/worker_death_logs/`.
+
 ## Domain Aggregate Rollup Benchmark
 
 The high-volume query suite identified the domain aggregate as the clearest million-row

@@ -129,6 +129,15 @@ class PageRepository(Protocol):
         lease_token: str,
     ) -> bool: ...
 
+    async def renew_frontier_lease(
+        self,
+        item_id: int,
+        *,
+        lease_owner: str,
+        lease_token: str,
+        extend_seconds: int,
+    ) -> bool: ...
+
     async def fail_frontier_item(
         self,
         item_id: int,
@@ -343,6 +352,32 @@ class SqlAlchemyRepository(Repository):
                 lease_token=None,
                 lease_expires_at=None,
                 completed_at=now,
+                updated_at=now,
+            )
+        )
+        await self._session.flush()
+        return bool(_rowcount(result))
+
+    async def renew_frontier_lease(
+        self,
+        item_id: int,
+        *,
+        lease_owner: str,
+        lease_token: str,
+        extend_seconds: int,
+    ) -> bool:
+        now = datetime.now(UTC)
+        result = await self._session.execute(
+            update(CrawlFrontierItem)
+            .where(
+                CrawlFrontierItem.id == item_id,
+                CrawlFrontierItem.state == "leased",
+                CrawlFrontierItem.lease_owner == lease_owner,
+                CrawlFrontierItem.lease_token == lease_token,
+                CrawlFrontierItem.lease_expires_at > now,
+            )
+            .values(
+                lease_expires_at=now + timedelta(seconds=extend_seconds),
                 updated_at=now,
             )
         )
@@ -720,6 +755,27 @@ class InMemoryRepository:
         item["lease_owner"] = None
         item["lease_token"] = None
         item["lease_expires_at"] = None
+        return True
+
+    async def renew_frontier_lease(
+        self,
+        item_id: int,
+        *,
+        lease_owner: str,
+        lease_token: str,
+        extend_seconds: int,
+    ) -> bool:
+        item = self.frontier.get(item_id)
+        if item is None:
+            return False
+        if (
+            item["state"] != "leased"
+            or item["lease_owner"] != lease_owner
+            or item["lease_token"] != lease_token
+            or not _lease_is_unexpired(item)
+        ):
+            return False
+        item["lease_expires_at"] = datetime.now(UTC) + timedelta(seconds=extend_seconds)
         return True
 
     async def save_page_and_complete_frontier_item(

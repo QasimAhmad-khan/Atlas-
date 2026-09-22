@@ -169,8 +169,15 @@ Run the controlled in-memory frontier recovery demo:
 Run the PostgreSQL-backed frontier recovery demo:
 
 ```powershell
-$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atlaspipe'
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe'
 .\.venv\Scripts\python scripts\postgres_frontier_recovery_demo.py
+```
+
+Run the real worker-death demo:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe'
+.\.venv\Scripts\python scripts\postgres_worker_death_demo.py --records 100000 --workers 4
 ```
 
 ## API Examples
@@ -239,6 +246,17 @@ PostgreSQL frontier recovery demo:
 | Logical pages persisted | 10,000 |
 | Lost records | 0 |
 
+Real worker-death experiment:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe'
+.\.venv\Scripts\python scripts\postgres_worker_death_demo.py --records 100000 --workers 4
+```
+
+This starts independent worker processes, kills one process while it owns live
+PostgreSQL leases, waits for normal lease expiry, and records recovery into
+`benchmarks/results/postgres_worker_death_demo.json`.
+
 See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for methodology, raw-result file names, and
 query-plan notes.
 
@@ -255,6 +273,7 @@ The deterministic test suite covers:
 - link classification
 - hashing and deduplication
 - durable frontier scheduling, lease recovery, and retry exhaustion
+- lease renewal for long-lived worker operations
 - retry classification, `Retry-After`, and transient HTTP status handling
 - domain concurrency limiting
 - URL safety validation, including private-address rejection

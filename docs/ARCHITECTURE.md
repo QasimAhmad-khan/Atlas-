@@ -27,6 +27,9 @@ creating duplicate logical page records.
 Workers claim no more rows than they can execute concurrently, then replenish on the next
 loop. Successful page persistence and frontier completion are fenced together in one
 transaction: the worker must still own the live lease before page metadata is written.
+While a healthy worker is processing a long response or honoring a retry delay, it renews
+the lease with the same owner/token fence. If renewal fails, the later completion/failure
+write is still rejected by the same fencing rule.
 
 Global request rate is controlled by a token bucket, while per-domain concurrency uses
 domain-keyed semaphores. The worker retries transient HTTP statuses (`429`, `500`,
@@ -47,6 +50,7 @@ The frontier is intentionally honest about distributed-system guarantees:
 - Delivery is at least once.
 - Each lease has an owner, token, and expiration time.
 - Expired leases become claimable by another worker.
+- Healthy workers renew long-lived leases with the same owner/token fence.
 - Completion and failure updates require matching `id`, `lease_owner`, `lease_token`, and
   `state='leased'`.
 - Successful page writes are coupled with fenced completion in one transaction.

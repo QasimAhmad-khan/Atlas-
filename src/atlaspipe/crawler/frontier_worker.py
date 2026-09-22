@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import math
 from collections.abc import AsyncIterator, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -47,6 +47,7 @@ class FrontierWorker:
         per_domain_concurrency: int = 100,
         requests_per_second: float = 1_000,
         retry_policy: RetryPolicy | None = None,
+        lease_renewal_interval_seconds: float | None = None,
     ) -> None:
         if (repository is None) == (repository_context_factory is None):
             raise ValueError("provide exactly one of repository or repository_context_factory")
@@ -60,6 +61,7 @@ class FrontierWorker:
         self._rate_limiter = TokenBucketRateLimiter(requests_per_second)
         self._domain_limiter = DomainConcurrencyLimiter(per_domain_concurrency)
         self._retry_policy = retry_policy or RetryPolicy(max_retries=0)
+        self._lease_renewal_interval_seconds = lease_renewal_interval_seconds
         self._parser = HtmlMetadataParser()
 
     @classmethod
@@ -75,6 +77,7 @@ class FrontierWorker:
         per_domain_concurrency: int = 100,
         requests_per_second: float = 1_000,
         retry_policy: RetryPolicy | None = None,
+        lease_renewal_interval_seconds: float | None = None,
     ) -> FrontierWorker:
         return cls(
             owner=owner,
@@ -86,6 +89,7 @@ class FrontierWorker:
             per_domain_concurrency=per_domain_concurrency,
             requests_per_second=requests_per_second,
             retry_policy=retry_policy,
+            lease_renewal_interval_seconds=lease_renewal_interval_seconds,
         )
 
     async def run_once(self) -> FrontierWorkerResult:
@@ -159,7 +163,8 @@ class FrontierWorker:
             return await self._process(lease)
 
     async def _process(self, lease: FrontierLease) -> bool | None:
-        result = await self._fetch_with_retries(lease.url)
+        async with self._renew_lease_while_processing(lease):
+            result = await self._fetch_with_retries(lease.url)
         if result.error_type is not None:
             async with self._repository_context() as repository:
                 accepted = await repository.fail_frontier_item(
@@ -232,6 +237,46 @@ class FrontierWorker:
         if header_delay is not None:
             return float(header_delay)
         return self._retry_policy.delay_for_attempt(attempt)
+
+    @asynccontextmanager
+    async def _renew_lease_while_processing(
+        self,
+        lease: FrontierLease,
+    ) -> AsyncIterator[None]:
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(self._renew_lease_until_stopped(lease, stop_event))
+        try:
+            yield
+        finally:
+            stop_event.set()
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+    async def _renew_lease_until_stopped(
+        self,
+        lease: FrontierLease,
+        stop_event: asyncio.Event,
+    ) -> None:
+        interval = self._lease_renewal_interval_seconds
+        if interval is None:
+            interval = max(0.5, self._lease_seconds / 3)
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                return
+            except TimeoutError:
+                pass
+
+            async with self._repository_context() as repository:
+                renewed = await repository.renew_frontier_lease(
+                    lease.id,
+                    lease_owner=lease.lease_owner,
+                    lease_token=lease.lease_token,
+                    extend_seconds=self._lease_seconds,
+                )
+            if not renewed:
+                return
 
     @asynccontextmanager
     async def _repository_context(self) -> AsyncIterator[PageRepository]:

@@ -95,5 +95,44 @@ async def test_sql_frontier_recovers_expired_lease_and_rejects_stale_page_write(
 
     assert accepted is False
     assert page_count == 0
-    assert recovered.attempt_count == 2
     assert completed is True
+    assert recovered.attempt_count == 2
+
+
+async def test_sql_frontier_renews_only_current_live_lease() -> None:
+    settings = Settings(database_url=os.environ["DATABASE_URL"])
+    engine = create_engine(settings)
+    session_factory = create_session_factory(engine)
+    run_id = uuid4().hex
+    url = f"https://sql-renew-{run_id}.test/page"
+    wrong_lease_token = f"not-current-{uuid4().hex}"
+
+    async with session_factory() as session:
+        repository = SqlAlchemyRepository(session)
+        job = await repository.create_job([url])
+        await repository.schedule_frontier_urls(job_id=job.id, urls=[url])
+        lease = (
+            await repository.acquire_frontier_batch(
+                owner="worker-1",
+                batch_size=1,
+                lease_seconds=30,
+            )
+        )[0]
+        renewed = await repository.renew_frontier_lease(
+            lease.id,
+            lease_owner=lease.lease_owner,
+            lease_token=lease.lease_token,
+            extend_seconds=60,
+        )
+        stale_renewed = await repository.renew_frontier_lease(
+            lease.id,
+            lease_owner=lease.lease_owner,
+            lease_token=wrong_lease_token,
+            extend_seconds=60,
+        )
+        await session.commit()
+
+    await engine.dispose()
+
+    assert renewed is True
+    assert stale_renewed is False

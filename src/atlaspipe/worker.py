@@ -28,6 +28,7 @@ async def run_worker() -> None:
             timeout_seconds=settings.request_timeout,
             user_agent=settings.user_agent,
             max_response_bytes=settings.max_response_bytes,
+            allow_private_networks=settings.allow_private_networks,
         ) as fetcher:
             worker = FrontierWorker.with_session_factory(
                 owner=owner,

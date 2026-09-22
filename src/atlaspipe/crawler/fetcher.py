@@ -45,11 +45,13 @@ class AioHttpFetcher:
         user_agent: str,
         max_response_bytes: int,
         max_redirects: int = 10,
+        allow_private_networks: bool = False,
     ) -> None:
         self._timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         self._user_agent = user_agent
         self._max_response_bytes = max_response_bytes
         self._max_redirects = max_redirects
+        self._allow_private_networks = allow_private_networks
         self._session: aiohttp.ClientSession | None = None
 
     async def __aenter__(self) -> AioHttpFetcher:
@@ -71,7 +73,10 @@ class AioHttpFetcher:
         started = time.perf_counter()
         try:
             current_url = url
-            validation = await validate_resolved_public_url(current_url)
+            validation = await validate_resolved_public_url(
+                current_url,
+                allow_private=self._allow_private_networks,
+            )
             if not validation.is_valid:
                 raise UnsafeUrlError(validation.reason or "unsafe_url")
 
@@ -80,7 +85,10 @@ class AioHttpFetcher:
                     headers = {key.lower(): value for key, value in response.headers.items()}
                     if response.status in {301, 302, 303, 307, 308} and "location" in headers:
                         current_url = urljoin(str(response.url), headers["location"])
-                        validation = await validate_resolved_public_url(current_url)
+                        validation = await validate_resolved_public_url(
+                            current_url,
+                            allow_private=self._allow_private_networks,
+                        )
                         if not validation.is_valid:
                             raise UnsafeUrlError(validation.reason or "unsafe_redirect_url")
                         continue
