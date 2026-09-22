@@ -27,8 +27,7 @@ blocked by missing local system tools.
   bounded pipeline processing, API routes, metrics, Docker assets, fixture scripts, and
   benchmark tooling.
 - Executed deterministic local benchmarks and recorded JSON results.
-- Copied the project to `C:\atlas` once; final refreshed copy still required after latest
-  workspace edits.
+- Refreshed the completed project into `C:\atlas`.
 
 ## Checkpoint 0 acceptance
 
