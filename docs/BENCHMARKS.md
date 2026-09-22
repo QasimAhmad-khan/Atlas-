@@ -1,6 +1,6 @@
 # Benchmarks
 
-These results were generated locally on 2026-09-22 with Python 3.13.5 on Windows.
+These results were recorded locally on 2026-09-22 with Python 3.13.5 on Windows.
 PostgreSQL 16.15 was run from the official EDB Windows x64 binary archive under
 `C:\atlas\.postgres_runtime` on port `55432`.
 
