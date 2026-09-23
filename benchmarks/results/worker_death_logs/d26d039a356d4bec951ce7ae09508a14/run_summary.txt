@@ -1,0 +1,24 @@
+AtlasPipe PostgreSQL worker-death run
+====================================
+
+Run ID: d26d039a356d4bec951ce7ae09508a14
+Timestamp UTC: 2026-09-23T05:53:22.737568+00:00
+Command:
+  python scripts/postgres_worker_death_demo.py --records 100000 --workers 8 --worker-concurrency 50 --batch-size 50 --slow-records 400 --slow-delay-seconds 8 --lease-seconds 5 --kill-after-seconds 5 --timeout-seconds 2400 --max-attempts 10 --output benchmarks/results/postgres_worker_death_demo.json
+
+Result:
+  scheduled: 100000
+  completed: 100000
+  dead: 0
+  pending: 0
+  leased: 0
+  workers_killed: 1
+  leases_orphaned: 50
+  leases_recovered: 50
+  logical_pages: 100000
+  logical_duplicates: 0
+  lost: 0
+
+Per-worker stdout/stderr logs were captured in this directory. The eight worker log files
+were zero bytes, meaning the killed-worker run completed without worker stderr/stdout
+output from the surviving processes.

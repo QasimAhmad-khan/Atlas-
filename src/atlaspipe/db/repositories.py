@@ -277,6 +277,7 @@ class SqlAlchemyRepository(Repository):
         lease_seconds: int,
     ) -> list[FrontierLease]:
         now = datetime.now(UTC)
+        await self._mark_expired_exhausted_leases_dead(now)
         lease_expires_at = now + timedelta(seconds=lease_seconds)
         rows = (
             await self._session.scalars(
@@ -328,6 +329,26 @@ class SqlAlchemyRepository(Repository):
             )
             for item in rows
         ]
+
+    async def _mark_expired_exhausted_leases_dead(self, now: datetime) -> None:
+        await self._session.execute(
+            update(CrawlFrontierItem)
+            .where(
+                CrawlFrontierItem.state == "leased",
+                CrawlFrontierItem.lease_expires_at < now,
+                CrawlFrontierItem.attempt_count >= CrawlFrontierItem.max_attempts,
+            )
+            .values(
+                state="dead",
+                available_at=now,
+                lease_owner=None,
+                lease_token=None,
+                lease_expires_at=None,
+                last_error_type="LeaseExpired",
+                last_error_message="lease expired after retry budget was exhausted",
+                updated_at=now,
+            )
+        )
 
     async def complete_frontier_item(
         self,
@@ -704,6 +725,20 @@ class InMemoryRepository:
         lease_seconds: int,
     ) -> list[FrontierLease]:
         now = datetime.now(UTC)
+        for item in self.frontier.values():
+            if (
+                item["state"] == "leased"
+                and item["attempt_count"] >= item["max_attempts"]
+                and item["lease_expires_at"] is not None
+                and item["lease_expires_at"] < now
+            ):
+                item["state"] = "dead"
+                item["available_at"] = now
+                item["lease_owner"] = None
+                item["lease_token"] = None
+                item["lease_expires_at"] = None
+                item["last_error_type"] = "LeaseExpired"
+                item["last_error_message"] = "lease expired after retry budget was exhausted"
         lease_expires_at = now + timedelta(seconds=lease_seconds)
         claimable = [
             item

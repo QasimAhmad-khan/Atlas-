@@ -110,6 +110,34 @@ async def test_frontier_recovers_expired_leases() -> None:
     assert recovered[0].attempt_count == 2
 
 
+async def test_frontier_marks_expired_exhausted_leases_dead() -> None:
+    repository = InMemoryRepository.empty()
+    job = await repository.create_job(["https://example.com/a"])
+    await repository.schedule_frontier_urls(
+        job_id=job.id,
+        urls=job.requested_urls,
+        max_attempts=1,
+    )
+    lease = (
+        await repository.acquire_frontier_batch(
+            owner="worker-1",
+            batch_size=1,
+            lease_seconds=30,
+        )
+    )[0]
+    repository.frontier[lease.id]["lease_expires_at"] = datetime.now(UTC) - timedelta(seconds=1)
+
+    recovered = await repository.acquire_frontier_batch(
+        owner="worker-2",
+        batch_size=1,
+        lease_seconds=30,
+    )
+
+    stats = await repository.frontier_stats(job_id=job.id)
+    assert recovered == []
+    assert stats.dead == 1
+
+
 async def test_frontier_rejects_stale_lease_completion() -> None:
     repository = InMemoryRepository.empty()
     job = await repository.create_job(["https://example.com/a"])

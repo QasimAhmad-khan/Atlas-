@@ -120,17 +120,35 @@ by `lease_owner` + `lease_token` fencing.
 This experiment uses real worker processes rather than manual lease timestamp changes.
 It starts a local HTTP fixture server, schedules PostgreSQL frontier work, launches
 independent `atlaspipe.worker` processes, kills one worker while it owns live leases, and
-then waits for those leases to expire naturally. The remaining workers must reclaim the
-abandoned items and account for every scheduled record.
+then waits for those leases to expire naturally. The remaining workers reclaimed the
+abandoned items and accounted for every scheduled record.
 
 Command:
 
 ```powershell
 $env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atlaspipe'
-.\.venv\Scripts\python scripts\postgres_worker_death_demo.py --records 100000 --workers 4
+.\.venv\Scripts\python scripts\postgres_worker_death_demo.py --records 100000 --workers 8 --worker-concurrency 50 --batch-size 50 --slow-records 400 --slow-delay-seconds 8 --lease-seconds 5 --kill-after-seconds 5 --timeout-seconds 2400 --max-attempts 10
 ```
 
-Raw output is written to:
+Latest measured result:
+
+| Metric | Value |
+|---|---:|
+| Scheduled records | 100,000 |
+| Completed records | 100,000 |
+| Dead records | 0 |
+| Pending / leased at finish | 0 / 0 |
+| Worker processes | 8 |
+| Workers killed | 1 |
+| Leases orphaned | 50 |
+| Leases recovered | 50 |
+| Logical pages persisted | 100,000 |
+| Logical duplicate pages | 0 |
+| Lost records | 0 |
+| Elapsed time | 1,404.230 s |
+| Throughput | 71.21 pages/sec |
+
+Raw output:
 
 ```text
 benchmarks/results/postgres_worker_death_demo.json

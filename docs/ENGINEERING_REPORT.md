@@ -72,10 +72,13 @@ in PostgreSQL, and ran four SQL-backed workers. Final result:
 - Lost records: 0
 - Logical pages persisted: 10,000
 
-The next operational proof is `scripts/postgres_worker_death_demo.py`, which starts real
+The real worker-death experiment in `scripts/postgres_worker_death_demo.py` starts real
 worker processes, kills one process while it owns live leases, lets those leases expire
 naturally, and records the recovery result to
-`benchmarks/results/postgres_worker_death_demo.json`.
+`benchmarks/results/postgres_worker_death_demo.json`. The latest run scheduled 100,000
+records with eight worker processes, killed one worker, orphaned 50 leases, recovered all
+50, completed 100,000 records, persisted 100,000 logical pages, and finished with zero
+lost records.
 
 ## 6. Database Scaling
 
@@ -118,9 +121,8 @@ explicit refresh step.
 
 ## 9. Chaos Testing
 
-The first chaos-style proof is PostgreSQL lease recovery with stale-completion fencing.
-The worker-death demo extends that from simulated lease abandonment to an actual killed
-worker process. A fuller suite should still add:
+The first chaos-style proofs are PostgreSQL lease recovery with stale-completion fencing
+and a real killed-worker process run. A fuller suite should still add:
 
 - worker death after fetch but before persistence
 - worker death after persistence but before completion ACK

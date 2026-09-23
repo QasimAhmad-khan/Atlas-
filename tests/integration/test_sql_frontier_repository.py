@@ -136,3 +136,47 @@ async def test_sql_frontier_renews_only_current_live_lease() -> None:
 
     assert renewed is True
     assert stale_renewed is False
+
+
+async def test_sql_frontier_marks_expired_exhausted_lease_dead() -> None:
+    settings = Settings(database_url=os.environ["DATABASE_URL"])
+    engine = create_engine(settings)
+    session_factory = create_session_factory(engine)
+    run_id = uuid4().hex
+    url = f"https://sql-exhausted-{run_id}.test/page"
+
+    async with session_factory() as session:
+        repository = SqlAlchemyRepository(session)
+        job = await repository.create_job([url])
+        await repository.schedule_frontier_urls(job_id=job.id, urls=[url], max_attempts=1)
+        lease = (
+            await repository.acquire_frontier_batch(
+                owner="worker-1",
+                batch_size=1,
+                lease_seconds=30,
+            )
+        )[0]
+        await session.commit()
+
+    async with session_factory() as session:
+        await session.execute(
+            update(CrawlFrontierItem)
+            .where(CrawlFrontierItem.id == lease.id)
+            .values(lease_expires_at=datetime.now(UTC) - timedelta(seconds=1))
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        repository = SqlAlchemyRepository(session)
+        recovered = await repository.acquire_frontier_batch(
+            owner="worker-2",
+            batch_size=1,
+            lease_seconds=30,
+        )
+        stats = await repository.frontier_stats(job_id=job.id)
+        await session.commit()
+
+    await engine.dispose()
+
+    assert recovered == []
+    assert stats.dead == 1

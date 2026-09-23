@@ -169,15 +169,15 @@ Run the controlled in-memory frontier recovery demo:
 Run the PostgreSQL-backed frontier recovery demo:
 
 ```powershell
-$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe'
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atlaspipe'
 .\.venv\Scripts\python scripts\postgres_frontier_recovery_demo.py
 ```
 
 Run the real worker-death demo:
 
 ```powershell
-$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe'
-.\.venv\Scripts\python scripts\postgres_worker_death_demo.py --records 100000 --workers 4
+$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atlaspipe'
+.\.venv\Scripts\python scripts\postgres_worker_death_demo.py --records 100000 --workers 8 --worker-concurrency 50 --batch-size 50 --slow-records 400 --slow-delay-seconds 8 --lease-seconds 5 --kill-after-seconds 5 --timeout-seconds 2400 --max-attempts 10
 ```
 
 ## API Examples
@@ -248,14 +248,21 @@ PostgreSQL frontier recovery demo:
 
 Real worker-death experiment:
 
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe'
-.\.venv\Scripts\python scripts\postgres_worker_death_demo.py --records 100000 --workers 4
-```
+| Test | Result |
+|---|---:|
+| Scheduled records | 100,000 |
+| Independent worker processes | 8 |
+| Worker processes killed | 1 |
+| Leases orphaned by killed worker | 50 |
+| Leases recovered by surviving workers | 50 |
+| Completed records | 100,000 |
+| Dead / pending / leased records at finish | 0 / 0 / 0 |
+| Logical pages persisted | 100,000 |
+| Logical duplicate pages | 0 |
+| Lost records | 0 |
+| Throughput | 71.21 pages/sec |
 
-This starts independent worker processes, kills one process while it owns live
-PostgreSQL leases, waits for normal lease expiry, and records recovery into
-`benchmarks/results/postgres_worker_death_demo.json`.
+Raw result: `benchmarks/results/postgres_worker_death_demo.json`.
 
 See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for methodology, raw-result file names, and
 query-plan notes.

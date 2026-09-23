@@ -6,13 +6,15 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
-from aiohttp import web
 from sqlalchemy import func, select
 
 from atlaspipe.config import get_settings
@@ -40,6 +42,7 @@ async def run_demo(
     slow_delay_seconds: float,
     kill_after_seconds: float,
     timeout_seconds: float,
+    max_attempts: int,
     output: Path,
 ) -> dict[str, object]:
     settings = get_settings()
@@ -48,16 +51,8 @@ async def run_demo(
     run_id = uuid4().hex
     started = time.perf_counter()
 
-    app = web.Application()
-    app.router.add_get("/run/{run_id}/page/{index}", _fixture_page)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "127.0.0.1", 0)
-    await site.start()
-    sockets = site._server.sockets if site._server is not None else []
-    if not sockets:
-        raise RuntimeError("fixture server did not bind a socket")
-    port = int(sockets[0].getsockname()[1])
+    server = _start_fixture_server()
+    port = int(server.server_address[1])
     base_url = f"http://127.0.0.1:{port}/run/{run_id}"
 
     urls = [
@@ -70,7 +65,11 @@ async def run_demo(
         async with session_factory() as session:
             repository = SqlAlchemyRepository(session)
             job = await repository.create_job(urls)
-            scheduled = await repository.schedule_frontier_urls(job_id=job.id, urls=urls)
+            scheduled = await repository.schedule_frontier_urls(
+                job_id=job.id,
+                urls=urls,
+                max_attempts=max_attempts,
+            )
             await session.commit()
 
         processes = _start_workers(
@@ -131,6 +130,7 @@ async def run_demo(
             "logical_duplicates": max(0, final_stats["complete"] - logical_pages),
             "lost": scheduled - final_stats["complete"] - final_stats["dead"],
             "lease_seconds": lease_seconds,
+            "max_attempts": max_attempts,
             "worker_concurrency": worker_concurrency,
             "batch_size": batch_size,
             "elapsed_seconds": round(elapsed_seconds, 3),
@@ -149,25 +149,49 @@ async def run_demo(
         return result
     finally:
         _stop_workers(processes)
-        await runner.cleanup()
+        await asyncio.to_thread(server.shutdown)
+        await asyncio.to_thread(server.server_close)
         await engine.dispose()
 
 
-async def _fixture_page(request: web.Request) -> web.Response:
-    delay = float(request.query.get("delay", "0"))
-    if delay > 0:
-        await asyncio.sleep(delay)
-    url = str(request.url)
-    html = f"""
-    <html>
-      <head>
-        <title>{url}</title>
-        <meta name="description" content="worker death fixture">
-      </head>
-      <body><main>{url}</main></body>
-    </html>
-    """
-    return web.Response(text=html, content_type="text/html")
+class FixtureRequestHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_GET(self) -> None:
+        parsed = urlsplit(self.path)
+        delay = float(parse_qs(parsed.query).get("delay", ["0"])[0])
+        if delay > 0:
+            time.sleep(delay)
+        url = f"http://{self.headers.get('host', '127.0.0.1')}{self.path}"
+        body = f"""
+        <html>
+          <head>
+            <title>{url}</title>
+            <meta name="description" content="worker death fixture">
+          </head>
+          <body><main>{url}</main></body>
+        </html>
+        """.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, _format: str, *_args: object) -> None:
+        return
+
+
+class QuietThreadingHTTPServer(ThreadingHTTPServer):
+    def handle_error(self, _request: object, _client_address: object) -> None:
+        return
+
+
+def _start_fixture_server() -> ThreadingHTTPServer:
+    server = QuietThreadingHTTPServer(("127.0.0.1", 0), FixtureRequestHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
 
 
 def _start_workers(
@@ -198,7 +222,7 @@ def _start_workers(
                 "PER_DOMAIN_CONCURRENCY": str(worker_concurrency * worker_processes),
                 "REQUESTS_PER_SECOND": str(max(1000, worker_concurrency * worker_processes * 20)),
                 "REQUEST_TIMEOUT": str(request_timeout_seconds),
-                "MAX_RETRIES": "0",
+                "MAX_RETRIES": "2",
                 "BATCH_SIZE": str(batch_size),
             }
         )
@@ -326,6 +350,7 @@ def main() -> None:
     parser.add_argument("--slow-delay-seconds", type=float, default=8)
     parser.add_argument("--kill-after-seconds", type=float, default=5)
     parser.add_argument("--timeout-seconds", type=float, default=600)
+    parser.add_argument("--max-attempts", type=int, default=10)
     parser.add_argument(
         "--output",
         type=Path,
@@ -345,6 +370,7 @@ def main() -> None:
             slow_delay_seconds=args.slow_delay_seconds,
             kill_after_seconds=args.kill_after_seconds,
             timeout_seconds=args.timeout_seconds,
+            max_attempts=args.max_attempts,
             output=args.output,
         )
     )
