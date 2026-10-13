@@ -1,0 +1,7 @@
+{
+  "environment": "local synthetic fixture",
+  "rows": 10000,
+  "database_version": "PostgreSQL 17.11 on x86_64-windows, compiled by msvc-19.44.35228, 64-bit",
+  "seed_seconds": 3.788383699997212,
+  "external_fetches": 0
+}

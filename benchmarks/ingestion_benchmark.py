@@ -39,7 +39,7 @@ class SyntheticFetcher:
 
 class TimedRepository(InMemoryRepository):
     def __init__(self, starts: dict[str, float], latencies_ms: list[float]) -> None:
-        super().__init__(jobs={}, pages={})
+        super().__init__(jobs={}, pages={}, frontier={})
         self._starts = starts
         self._latencies_ms = latencies_ms
 

@@ -1,0 +1,8 @@
+{
+  "pid": 23060,
+  "window_seconds": 32.4913078,
+  "cpu_seconds": 29.734375,
+  "working_set_before_bytes": 95895552,
+  "working_set_after_bytes": 99606528,
+  "measurement": "Authenticated final API over three sequential runs, no simultaneous verification suite; endpoint memory snapshots are not peaks"
+}
