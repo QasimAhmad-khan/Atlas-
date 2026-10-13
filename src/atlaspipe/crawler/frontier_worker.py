@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
 from dataclasses import dataclass
@@ -9,12 +10,16 @@ from datetime import UTC, datetime
 from typing import Protocol
 from urllib.parse import urlsplit
 
+import structlog
+from opentelemetry import trace
+from opentelemetry.propagate import extract
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atlaspipe.crawler.fetcher import FetchResult
 from atlaspipe.crawler.rate_limiter import DomainConcurrencyLimiter, TokenBucketRateLimiter
 from atlaspipe.crawler.retry import RetryPolicy, retry_after_seconds, should_retry_status
 from atlaspipe.db.repositories import FrontierLease, PageRepository, SqlAlchemyRepository
+from atlaspipe.observability.telemetry import RETRIES, WORK, trace_id
 from atlaspipe.parsing.html_parser import HtmlMetadataParser
 from atlaspipe.pipeline.pipeline import page_from_fetch_result
 
@@ -167,8 +172,47 @@ class FrontierWorker:
             return await self._process(lease)
 
     async def _process(self, lease: FrontierLease) -> bool | None:
-        async with self._renew_lease_while_processing(lease):
-            return await self._process_renewed(lease)
+        started = time.perf_counter()
+        with trace.get_tracer("atlaspipe").start_as_current_span(
+            "crawl.process",
+            context=extract({"traceparent": lease.traceparent or ""}),
+            kind=trace.SpanKind.CONSUMER,
+            record_exception=False,
+            set_status_on_exception=False,
+        ) as span:
+            span.set_attribute("job.id", lease.job_id)
+            with structlog.contextvars.bound_contextvars(
+                service="worker",
+                job_id=lease.job_id,
+                worker_id=self._owner,
+                trace_id=trace_id(),
+            ):
+                try:
+                    async with self._renew_lease_while_processing(lease):
+                        accepted = await self._process_renewed(lease)
+                    outcome = (
+                        "complete"
+                        if accepted is True
+                        else "failed"
+                        if accepted is False
+                        else "stale"
+                    )
+                    WORK.labels(outcome).inc()
+                    if accepted is False:
+                        span.set_status(trace.StatusCode.ERROR)
+                    structlog.get_logger().info(
+                        "crawl.completed", outcome=outcome, duration=time.perf_counter() - started
+                    )
+                    return accepted
+                except Exception as exc:
+                    span.set_attribute("error.type", type(exc).__name__)
+                    span.set_status(trace.StatusCode.ERROR)
+                    structlog.get_logger().error(
+                        "crawl.failed",
+                        error_category=type(exc).__name__,
+                        duration=time.perf_counter() - started,
+                    )
+                    raise
 
     async def _process_renewed(self, lease: FrontierLease) -> bool | None:
         result = await self._fetch_with_retries(lease.url)
@@ -216,12 +260,17 @@ class FrontierWorker:
             return False if accepted else None
 
         async with self._repository_context() as repository:
-            accepted = await repository.save_page_and_complete_frontier_item(
-                item_id=lease.id,
-                lease_owner=lease.lease_owner,
-                lease_token=lease.lease_token,
-                page=page,
-            )
+            with trace.get_tracer("atlaspipe").start_as_current_span(
+                "crawl.persist",
+                record_exception=False,
+                set_status_on_exception=False,
+            ):
+                accepted = await repository.save_page_and_complete_frontier_item(
+                    item_id=lease.id,
+                    lease_owner=lease.lease_owner,
+                    lease_token=lease.lease_token,
+                    page=page,
+                )
         return True if accepted else None
 
     async def _fetch_with_retries(self, url: str) -> FetchResult:
@@ -234,6 +283,7 @@ class FrontierWorker:
             if result.error_type is None and not should_retry_status(result.status):
                 return result
             if attempt <= self._retry_policy.max_retries:
+                RETRIES.inc()
                 await asyncio.sleep(self._retry_delay_for_result(result, attempt))
         if result is None:
             raise RuntimeError("fetch retry loop produced no result")

@@ -7,7 +7,7 @@ Branch: `feature/production-engineering`.
 | --- | --- | --- |
 | 0 Audit | Complete initial code audit | 33 passed / 3 DB skipped; lint/format passed; existing mypy error recorded |
 | 1 Security and health | Auth, shared PostgreSQL quotas, bounded bodies, connector DNS validation, heartbeat, bounded shutdown and log redaction | 51 tests passed with PostgreSQL 17.11; lint/format/mypy passed; migration drift correction verified below |
-| 2 Observability | Pending | Pending |
+| 2 Observability | Prometheus HTTP/DB/queue/worker metrics, W3C queue tracing, correlation logs, local stack and dashboard | 54 tests passed with PostgreSQL; lint/mypy passed; complete Compose/Grafana rendering blocked by absent Docker |
 | 3 AWS definitions | Pending | No AWS approval or deployment |
 | 4 Delivery | Pending | No remote release |
 | 5 Reliability | Pending | Historical local evidence retained |

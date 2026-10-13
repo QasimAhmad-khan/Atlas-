@@ -1,0 +1,39 @@
+groups:
+  - name: atlaspipe
+    rules:
+      - alert: AtlasDatabaseUnavailable
+        expr: min(atlaspipe_telemetry_database_up) == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations:
+          summary: Queue telemetry cannot reach PostgreSQL
+      - alert: AtlasNoHealthyWorkers
+        expr: max(atlaspipe_workers{state="active"}) == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: No worker heartbeat is fresh
+      - alert: AtlasWorkerFailed
+        expr: max(atlaspipe_workers{state=~"failed|stalled"}) > 0
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: Worker with active leases failed or stalled
+      - alert: AtlasBacklogAging
+        expr: max(atlaspipe_oldest_pending_seconds) > 120
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: Pending work is older than two minutes
+      - alert: AtlasApiErrors
+        expr: sum(rate(atlaspipe_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(atlaspipe_http_requests_total[5m])), 0.001) > 0.05
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: API server errors exceed five percent
+      - alert: AtlasTelemetryMissing
+        expr: up{job=~"atlaspipe-.*"} == 0
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: Prometheus cannot scrape an Atlas target

@@ -1,0 +1,16 @@
+rule_files: [alerts.yml]
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - series: atlaspipe_telemetry_database_up
+        values: '1x2 0x5 1x8'
+    alert_rule_test:
+      - eval_time: 1m15s
+        alertname: AtlasDatabaseUnavailable
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: Queue telemetry cannot reach PostgreSQL}
+      - eval_time: 2m30s
+        alertname: AtlasDatabaseUnavailable
+        exp_alerts: []

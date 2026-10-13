@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import sys
 from collections.abc import MutableMapping
@@ -42,6 +43,7 @@ def configure_logging(level: str) -> None:
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
+            log_defaults,
             redact_secrets,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             structlog.processors.add_log_level,
@@ -51,3 +53,21 @@ def configure_logging(level: str) -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
+
+
+def log_defaults(
+    _logger: object, _method: str, event: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
+    for key, value in {
+        "service": "cli",
+        "environment": os.getenv("ENVIRONMENT", "local"),
+        "release": os.getenv("RELEASE", "development"),
+        "request_id": None,
+        "trace_id": None,
+        "job_id": None,
+        "worker_id": None,
+        "duration": None,
+    }.items():
+        event.setdefault(key, value)
+    event["severity"] = _method.upper()
+    return event

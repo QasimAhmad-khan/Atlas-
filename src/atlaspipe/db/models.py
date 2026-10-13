@@ -71,6 +71,7 @@ class CrawlJob(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     requested_urls: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    traceparent: Mapped[str | None] = mapped_column(String(55))
     processed_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     success_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     failure_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")

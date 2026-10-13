@@ -10,11 +10,12 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from atlaspipe.config import Settings, get_settings
+from atlaspipe.observability.telemetry import instrument_database
 
 
 def create_engine(settings: Settings | None = None) -> AsyncEngine:
     resolved = settings or get_settings()
-    return create_async_engine(
+    engine = create_async_engine(
         resolved.database_url,
         pool_pre_ping=True,
         pool_size=resolved.database_pool_size,
@@ -22,6 +23,8 @@ def create_engine(settings: Settings | None = None) -> AsyncEngine:
         pool_timeout=resolved.database_pool_timeout,
         connect_args={"command_timeout": resolved.database_command_timeout, "timeout": 5},
     )
+    instrument_database(engine)
+    return engine
 
 
 def create_session_factory(

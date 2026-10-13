@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from opentelemetry.propagate import inject
 
 from atlaspipe.api.dependencies import repository_dependency
 from atlaspipe.api.security import authorize_write, consume_quota
@@ -32,7 +33,9 @@ async def create_crawl(
                 detail={"url": url, "reason": validation.reason},
             )
     await consume_quota(http_request, len(urls))
-    job = await repository.create_job(urls)
+    carrier: dict[str, str] = {}
+    inject(carrier)
+    job = await repository.create_job(urls, traceparent=carrier.get("traceparent"))
     await repository.schedule_frontier_urls(job_id=job.id, urls=urls)
     return job
 

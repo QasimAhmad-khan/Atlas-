@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     worker_drain_seconds: float = Field(default=30, gt=0)
     worker_heartbeat_seconds: float = Field(default=5, gt=0)
     worker_stale_seconds: float = Field(default=30, gt=0)
+    worker_metrics_port: int = Field(default=0, ge=0, le=65535)
     environment: str = "local"
     release: str = "development"
 
