@@ -1,5 +1,9 @@
 # Cost and teardown
 
+The delivered showcase incurred no AWS resource charges: no AWS account was configured and no infrastructure was provisioned. The following procedures apply only if a separate future cloud demonstration is authorized.
+
+Include the new WAF web ACL/rule/request charges in the reviewed estimate. No WAF resources have been provisioned.
+
 No AWS resources have been created and no current dollar estimate has been measured. Before approval, obtain a regional AWS Pricing Calculator estimate for RDS (storage/backups), Fargate app/collector tasks, ALB, NAT gateway hours and data processing, IPv4 addresses, ECR, CloudWatch/container insights, managed telemetry and egress. The default single NAT may cost more than the small API workload. Budget alerts do not impose a spending cap and billing data can lag.
 
 Use a dedicated demo account/environment with an owner and a planned removal time. Create a reviewed real-account plan; verify ACM, secret/KMS ARNs, GitHub OIDC environment restrictions, remote state encryption/locking, alarms and notification subscription confirmation. Never add plaintext secrets to tfvars. Local Terraform state is ignored but must be secured; configure an encrypted S3 backend with restricted access and native S3 locking before a shared deployment.

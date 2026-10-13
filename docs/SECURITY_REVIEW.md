@@ -1,0 +1,18 @@
+# Security review
+
+The upgrade adds fail-closed write authentication, authenticated data reads, distinct optional read credentials (403 on submission), a separate metrics key, request byte/URL limits, shared PostgreSQL submission quotas and cloud WAF ingress limits. Health probes remain open; data/metrics do not. Authentication uses constant-time byte comparisons. Secrets are `SecretStr` settings and are not metric/trace labels. API exceptions return generic 500/503 and log sanitized categories; redaction handles nested secret fields, URL credentials/queries and malformed URLs.
+
+Crawler checks preserve scheme, metadata/private-address, redirect and response-byte controls. The connection resolver validates the addresses actually supplied to aiohttp, closing the separate-DNS-check gap. Redirects are checked at every hop. Private crawling is forbidden in production; the local fault fixtures explicitly permit localhost and still block metadata addresses. Retries, request timeouts, concurrency and shutdown drain are bounded. Retry-After is capped at 30 seconds.
+
+Production configuration requires strong credentials and verified database TLS. RDS is encrypted and private. Runtime roles have IAM access to one DML-only database login, not admin credentials or DDL. Only migration execution can retrieve the managed admin secret. ALB cannot route internal metrics; task metrics have no public ingress. GitHub OIDC trust is bound to repository, audience and protected environment. PassRole is limited to the task/execution roles and the ECS service principal. Necessary ECR authorization and ECS registration/read APIs use wildcard resources because those APIs require them; deployment/write resources are scoped.
+
+The dependency audit initially found five advisory entries (including duplicated IDs) in Black and pytest. Unused Black and its Makefile invocations were removed; pytest/async tooling was upgraded and locked. The subsequent audit reported no known vulnerabilities. Raw before/after JSON is in `artifacts/`. This is a dependency advisory check, not proof that application code or container images are vulnerability-free. Container Trivy scanning is a required CI gate and has not executed locally because Docker is absent.
+
+Final adversarial checks covered authorization/no-job-creation, oversized payloads, cross-replica quota atomicity, DNS rebinding, metadata redirects, stale fencing, atomic crash boundaries, database interruption, pool exhaustion, retry exhaustion, graceful drain, trace privacy, bounded metric labels, release-revision checking and rollback control flow. Test settings isolate developer `.env` secrets and cloud authentication from fixture tests. Historical million-row benchmark files are preserved.
+
+## Remaining gates and limits
+
+* Shared submission quotas use fixed database-clock minute windows, so bursts can occur at a window boundary. WAF's per-IP ingress limit is approximate; PostgreSQL is the authoritative job-submission quota. WAF applies to reads as well as writes, returns 429 and adds recurring cloud cost.
+* Data access is a single-project bearer-key model, not user accounts or tenant isolation. Rotate injected ECS credentials by replacing tasks. Protect GitHub environment approval, branch rules, secrets and Terraform state.
+* Actual IAM/KMS reachability, public RDS denial, managed secret rotation, WAF behavior, collector export, notification delivery, image scans and cloud rollback require approved AWS/CI verification.
+* One-AZ demo RDS, one NAT and one API replica do not provide production HA. No exactly-once execution, production capacity, AWS incident recovery or RDS restoration claim is supported yet.

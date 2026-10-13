@@ -1,0 +1,58 @@
+{
+  "status": "success",
+  "data": {
+    "activeTargets": [
+      {
+        "discoveredLabels": {
+          "__address__": "127.0.0.1:58000",
+          "__metrics_path__": "/internal/metrics",
+          "__scheme__": "http",
+          "__scrape_interval__": "5s",
+          "__scrape_timeout__": "5s",
+          "job": "atlaspipe-api"
+        },
+        "labels": {
+          "instance": "127.0.0.1:58000",
+          "job": "atlaspipe-api"
+        },
+        "scrapePool": "atlaspipe-api",
+        "scrapeUrl": "http://127.0.0.1:58000/internal/metrics",
+        "globalUrl": "http://Qasim-PC:58000/internal/metrics",
+        "lastError": "",
+        "lastScrape": "2026-10-14T02:34:55.5236231+05:00",
+        "lastScrapeDuration": 0.0317088,
+        "health": "up",
+        "scrapeInterval": "5s",
+        "scrapeTimeout": "5s"
+      },
+      {
+        "discoveredLabels": {
+          "__address__": "127.0.0.1:58081",
+          "__metrics_path__": "/internal/metrics",
+          "__scheme__": "http",
+          "__scrape_interval__": "5s",
+          "__scrape_timeout__": "5s",
+          "job": "atlaspipe-worker"
+        },
+        "labels": {
+          "instance": "127.0.0.1:58081",
+          "job": "atlaspipe-worker"
+        },
+        "scrapePool": "atlaspipe-worker",
+        "scrapeUrl": "http://127.0.0.1:58081/internal/metrics",
+        "globalUrl": "http://Qasim-PC:58081/internal/metrics",
+        "lastError": "",
+        "lastScrape": "2026-10-14T02:34:59.2425561+05:00",
+        "lastScrapeDuration": 0.002935,
+        "health": "up",
+        "scrapeInterval": "5s",
+        "scrapeTimeout": "5s"
+      }
+    ],
+    "droppedTargets": [],
+    "droppedTargetCounts": {
+      "atlaspipe-api": 0,
+      "atlaspipe-worker": 0
+    }
+  }
+}

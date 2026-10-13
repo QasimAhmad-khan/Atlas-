@@ -1,0 +1,10 @@
+{
+  "environment": "local Windows/POSIX fixture; not AWS",
+  "timestamp": "2026-10-13T21:27:45.969527+00:00",
+  "passed": true,
+  "fault_readiness": 503,
+  "liveness": 200,
+  "restored_readiness": 200,
+  "detection_and_recovery_seconds": 0.1724303000009968,
+  "trigger": "close DB TCP connections and reject reconnections in an owned proxy"
+}

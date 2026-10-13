@@ -1,5 +1,7 @@
 # AWS architecture
 
+A regional WAF rate rule protects all public read/write ingress at approximately 300 requests per minute per source IP and returns 429. PostgreSQL remains the exact submission quota. WAF adds cost and its live enforcement is not yet verified. Data reads require a write or optional read key; cloud defaults provide the write key, while health probes stay open.
+
 Definitions in `infra/` target ECR, two independent Fargate services, HTTPS ALB, private RDS PostgreSQL 16, task roles, GitHub environment OIDC, CloudWatch and budget alerts. Terraform 1.10.5 is used for local validation; AWS provider is selected and pinned by `.terraform.lock.hcl`. No resources have been provisioned.
 
 ```mermaid

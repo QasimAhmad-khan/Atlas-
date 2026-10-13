@@ -1,5 +1,9 @@
 # Deployment runbook
 
+This delivery is a local showcase. AWS account configuration and deployment were explicitly excluded by the owner; the AWS sections below are optional future procedures, not required setup or executed evidence.
+
+All job/page/stat reads need a read or write bearer credential. Set API_KEY for smoke tests and k6; health endpoints remain unauthenticated. Read keys are optional application configuration; the default cloud task supplies the write key.
+
 ## Local
 
 Use Python 3.12+, uv 0.13.0 and Docker Compose. Run `uv sync --frozen --extra dev`, `uv run python scripts/configure_local.py`, then `docker compose up --build --wait app worker prometheus collector tempo grafana`. Job submission requires `Authorization: Bearer <API_KEY from .env>`. Health probes remain unauthenticated. The database uses demo credentials and a localhost-only published port. Do not reuse these credentials or expose this stack publicly.

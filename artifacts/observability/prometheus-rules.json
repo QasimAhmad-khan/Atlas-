@@ -1,0 +1,138 @@
+{
+  "status": "success",
+  "data": {
+    "groups": [
+      {
+        "name": "atlaspipe",
+        "file": "C:/Users/dell/Documents/Codex/2026-10-14/https-github-com-qasimahmad-khan-atlas/outputs/Atlas/observability/alerts.yml",
+        "rules": [
+          {
+            "state": "firing",
+            "name": "AtlasDatabaseUnavailable",
+            "query": "min(atlaspipe_telemetry_database_up) == 0",
+            "duration": 30,
+            "keepFiringFor": 0,
+            "labels": {
+              "severity": "critical"
+            },
+            "annotations": {
+              "summary": "Queue telemetry cannot reach PostgreSQL"
+            },
+            "alerts": [
+              {
+                "labels": {
+                  "alertname": "AtlasDatabaseUnavailable",
+                  "severity": "critical"
+                },
+                "annotations": {
+                  "summary": "Queue telemetry cannot reach PostgreSQL"
+                },
+                "state": "firing",
+                "activeAt": "2026-10-13T21:30:05.228579575Z",
+                "value": "0e+00"
+              }
+            ],
+            "health": "ok",
+            "evaluationTime": 0,
+            "lastEvaluation": "2026-10-14T02:35:00.2295196+05:00",
+            "type": "alerting"
+          },
+          {
+            "state": "inactive",
+            "name": "AtlasNoHealthyWorkers",
+            "query": "max(atlaspipe_workers{state=\"active\"}) == 0",
+            "duration": 60,
+            "keepFiringFor": 0,
+            "labels": {
+              "severity": "critical"
+            },
+            "annotations": {
+              "summary": "No worker heartbeat is fresh"
+            },
+            "alerts": [],
+            "health": "ok",
+            "evaluationTime": 0,
+            "lastEvaluation": "2026-10-14T02:35:00.2300731+05:00",
+            "type": "alerting"
+          },
+          {
+            "state": "inactive",
+            "name": "AtlasWorkerFailed",
+            "query": "max(atlaspipe_workers{state=~\"failed|stalled\"}) > 0",
+            "duration": 30,
+            "keepFiringFor": 0,
+            "labels": {
+              "severity": "warning"
+            },
+            "annotations": {
+              "summary": "Worker with active leases failed or stalled"
+            },
+            "alerts": [],
+            "health": "ok",
+            "evaluationTime": 0,
+            "lastEvaluation": "2026-10-14T02:35:00.2300731+05:00",
+            "type": "alerting"
+          },
+          {
+            "state": "inactive",
+            "name": "AtlasBacklogAging",
+            "query": "max(atlaspipe_oldest_pending_seconds) > 120",
+            "duration": 120,
+            "keepFiringFor": 0,
+            "labels": {
+              "severity": "warning"
+            },
+            "annotations": {
+              "summary": "Pending work is older than two minutes"
+            },
+            "alerts": [],
+            "health": "ok",
+            "evaluationTime": 0,
+            "lastEvaluation": "2026-10-14T02:35:00.2300731+05:00",
+            "type": "alerting"
+          },
+          {
+            "state": "inactive",
+            "name": "AtlasApiErrors",
+            "query": "sum(rate(atlaspipe_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(atlaspipe_http_requests_total[5m])), 0.001) > 0.05",
+            "duration": 120,
+            "keepFiringFor": 0,
+            "labels": {
+              "severity": "critical"
+            },
+            "annotations": {
+              "summary": "API server errors exceed five percent"
+            },
+            "alerts": [],
+            "health": "ok",
+            "evaluationTime": 0.0005664,
+            "lastEvaluation": "2026-10-14T02:35:00.2300731+05:00",
+            "type": "alerting"
+          },
+          {
+            "state": "inactive",
+            "name": "AtlasTelemetryMissing",
+            "query": "up{job=~\"atlaspipe-.*\"} == 0",
+            "duration": 60,
+            "keepFiringFor": 0,
+            "labels": {
+              "severity": "warning"
+            },
+            "annotations": {
+              "summary": "Prometheus cannot scrape an Atlas target"
+            },
+            "alerts": [],
+            "health": "ok",
+            "evaluationTime": 0,
+            "lastEvaluation": "2026-10-14T02:35:00.2306395+05:00",
+            "type": "alerting"
+          }
+        ],
+        "interval": 5,
+        "limit": 0,
+        "evaluationTime": 0.0011199,
+        "lastEvaluation": "2026-10-14T02:35:00.2295196+05:00"
+      }
+    ]
+  }
+}

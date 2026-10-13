@@ -1,5 +1,35 @@
 # AtlasPipe
 
+## Engineering showcase — verification status
+
+Authenticated job submission, shared PostgreSQL quotas, DNS-safe fetching, worker health/drain,
+Prometheus metrics and API → queue → worker → persistence tracing are implemented. The local
+PostgreSQL suite passed **73 tests**. A real worker-death fixture completed **200/200 records**,
+recovered **4/4 orphaned leases**, and found no lost or duplicate logical records.
+
+Terraform and protected GitHub release workflows are prepared, with private RDS, independent
+ECS services, HTTPS, IAM database login, OIDC, ingress limiting and rollback verification.
+Terraform validation/security plan tests, Prometheus rule tests and workflow lint passed.
+**AWS account configuration and deployment are outside this showcase's scope. No AWS resources
+have been provisioned. Remote CI, image scans and the full Compose/Tempo stack remain unverified.**
+
+The dashboard below is an actual local Grafana 12.2.1 capture using Prometheus 3.5.0, authenticated
+API traffic and a running worker. Five-minute rate charts smooth a short traffic burst; the
+performance report contains the separately measured k6 results.
+
+![Live local Grafana dashboard](artifacts/observability/grafana-api.jpg)
+
+[Worker health](artifacts/observability/grafana-worker.jpg) and
+[database panels](artifacts/observability/grafana-db.jpg).
+
+See [implementation status](docs/IMPLEMENTATION_STATUS.md),
+[upgrade report](docs/IMPLEMENTATION_REPORT.md), [AWS architecture](docs/AWS_ARCHITECTURE.md),
+[deployment](docs/DEPLOYMENT_RUNBOOK.md), [rollback](docs/ROLLBACK_RUNBOOK.md),
+[observability](docs/OBSERVABILITY.md), [reliability](docs/RELIABILITY_TEST_REPORT.md),
+[performance](docs/PERFORMANCE_REPORT.md), [security](docs/SECURITY_REVIEW.md), and
+[cost/teardown](docs/COST_AND_TEARDOWN.md). Measured evidence is in `artifacts/`.
+The million-row results below are historical local benchmarks retained from the original repository.
+
 AtlasPipe is an asynchronous Python data-ingestion pipeline for building a structured,
 queryable dataset from permitted public web resources. It crawls URLs politely, extracts
 web metadata and technographic hints, normalizes and deduplicates records, persists them
@@ -110,8 +140,8 @@ Linux/macOS:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install uv==0.13.0
+uv sync --frozen --extra dev
 python -m pytest
 ```
 
@@ -131,8 +161,8 @@ Windows PowerShell:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python -m pip install --upgrade pip
-.\.venv\Scripts\python -m pip install -e ".[dev]"
+python -m pip install uv==0.13.0
+uv sync --frozen --extra dev
 .\.venv\Scripts\python -m pytest
 ```
 
@@ -147,11 +177,12 @@ Run quality checks:
 ## Docker Quick Start
 
 ```powershell
-docker compose up --build
+python scripts/configure_local.py
+docker compose up --build --wait app worker prometheus collector tempo grafana
 ```
 
-The compose stack starts PostgreSQL, the API, and a separate worker process. The API
-applies Alembic migrations on startup, exposes FastAPI on `http://localhost:8000`, and
+The compose stack starts PostgreSQL, a one-off migration service, the API and separate workers.
+The API waits for the migration service, exposes FastAPI on `http://localhost:8000`, and
 uses PostgreSQL by default rather than an in-memory repository.
 
 Apply migrations manually:
@@ -183,14 +214,14 @@ $env:DATABASE_URL='postgresql+asyncpg://atlaspipe:atlaspipe@localhost:55432/atla
 ## API Examples
 
 ```powershell
-curl http://localhost:8000/health
-curl http://localhost:8000/live
-curl http://localhost:8000/ready
-curl -X POST http://localhost:8000/crawl -H "Content-Type: application/json" -d "{\"urls\":[\"https://example.com\"]}"
-curl "http://localhost:8000/pages?limit=25&domain=example.com"
-curl http://localhost:8000/stats
-curl http://localhost:8000/stats/domains
-curl http://localhost:8000/stats/status-codes
+$env:API_KEY=(Get-Content .env | Where-Object { $_ -match '^API_KEY=' }) -replace '^API_KEY=',''
+$headers=@{Authorization="Bearer $env:API_KEY"}
+Invoke-RestMethod http://localhost:8000/live
+Invoke-RestMethod http://localhost:8000/ready
+$body=@{urls=@('https://example.com')} | ConvertTo-Json
+Invoke-RestMethod http://localhost:8000/crawl -Method Post -Headers $headers -ContentType 'application/json' -Body $body
+Invoke-RestMethod 'http://localhost:8000/pages?limit=25&domain=example.com' -Headers $headers
+Invoke-RestMethod http://localhost:8000/stats -Headers $headers
 ```
 
 ## Benchmarks

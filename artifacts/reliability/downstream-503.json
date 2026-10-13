@@ -1,0 +1,16 @@
+{
+  "environment": "local Windows/POSIX fixture; not AWS",
+  "timestamp": "2026-10-13T21:27:44.862727+00:00",
+  "passed": true,
+  "attempts": 2,
+  "logical_pages": 0,
+  "frontier": {
+    "pending": 0,
+    "leased": 0,
+    "complete": 0,
+    "failed": 0,
+    "dead": 1
+  },
+  "duration_seconds": 0.0748937999996997,
+  "max_fetch_attempts": 4
+}
