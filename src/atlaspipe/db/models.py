@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     String,
@@ -32,6 +33,22 @@ class TimestampMixin:
     )
 
 
+class ApiQuota(Base):
+    __tablename__ = "api_quotas"
+    principal: Mapped[str] = mapped_column(String(64), primary_key=True)
+    window: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    requests: Mapped[int] = mapped_column(Integer, nullable=False)
+    urls: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class WorkerHeartbeat(Base):
+    __tablename__ = "worker_heartbeats"
+    worker_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    progress_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    release: Mapped[str] = mapped_column(String(128), nullable=False)
+
+
 class CrawlJob(TimestampMixin, Base):
     __tablename__ = "crawl_jobs"
     __table_args__ = (
@@ -49,7 +66,7 @@ class CrawlJob(TimestampMixin, Base):
         Index("ix_crawl_jobs_status", "status"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -91,7 +108,7 @@ class CrawlFrontierItem(TimestampMixin, Base):
         Index("ix_crawl_frontier_lease_expires_at", "lease_expires_at"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("crawl_jobs.id", ondelete="CASCADE"))
     url: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_url: Mapped[str] = mapped_column(Text, nullable=False)
@@ -156,7 +173,7 @@ class Page(TimestampMixin, Base):
         Index("ix_pages_normalized_url", "normalized_url"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_url: Mapped[str] = mapped_column(Text, nullable=False)
     canonical_url: Mapped[str | None] = mapped_column(Text)
@@ -251,7 +268,7 @@ class CrawlAttempt(TimestampMixin, Base):
         Index("ix_crawl_attempts_status", "status"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("crawl_jobs.id", ondelete="CASCADE"))
     url: Mapped[str] = mapped_column(Text, nullable=False)
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -273,7 +290,7 @@ class Link(Base):
         Index("ix_links_target_domain", "target_domain"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     source_page_id: Mapped[int] = mapped_column(ForeignKey("pages.id", ondelete="CASCADE"))
     target_url: Mapped[str] = mapped_column(Text, nullable=False)
     target_domain: Mapped[str | None] = mapped_column(String(255))

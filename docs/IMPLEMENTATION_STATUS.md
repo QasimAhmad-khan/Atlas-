@@ -6,7 +6,7 @@ Branch: `feature/production-engineering`.
 | Phase | Implementation | Verification |
 | --- | --- | --- |
 | 0 Audit | Complete initial code audit | 33 passed / 3 DB skipped; lint/format passed; existing mypy error recorded |
-| 1 Security and health | In progress | PostgreSQL baseline pending |
+| 1 Security and health | Auth, shared PostgreSQL quotas, bounded bodies, connector DNS validation, heartbeat, bounded shutdown and log redaction | 51 tests passed with PostgreSQL 17.11; lint/format/mypy passed; migration drift correction verified below |
 | 2 Observability | Pending | Pending |
 | 3 AWS definitions | Pending | No AWS approval or deployment |
 | 4 Delivery | Pending | No remote release |

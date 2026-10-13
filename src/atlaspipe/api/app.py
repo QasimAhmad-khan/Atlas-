@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import JSONResponse
 
 from atlaspipe.api.routes.crawl import router as crawl_router
 from atlaspipe.api.routes.health import router as health_router
@@ -44,6 +47,21 @@ def create_app(
         description="Async web metadata ingestion pipeline.",
         lifespan=lifespan,
     )
+    app.state.settings = resolved_settings
+    app.state.quota_lock = asyncio.Lock()
+    app.state.test_quota = {}
+
+    @app.middleware("http")
+    async def limit_request_body(request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if request.method in {"POST", "PUT", "PATCH"}:
+            body = bytearray()
+            async for chunk in request.stream():
+                body.extend(chunk)
+                if len(body) > resolved_settings.api_max_body_bytes:
+                    return JSONResponse({"detail": "request body too large"}, status_code=413)
+            request._body = bytes(body)
+        return await call_next(request)
+
     app.include_router(health_router)
     app.include_router(crawl_router)
     app.include_router(pages_router)

@@ -14,7 +14,14 @@ from atlaspipe.config import Settings, get_settings
 
 def create_engine(settings: Settings | None = None) -> AsyncEngine:
     resolved = settings or get_settings()
-    return create_async_engine(resolved.database_url, pool_pre_ping=True)
+    return create_async_engine(
+        resolved.database_url,
+        pool_pre_ping=True,
+        pool_size=resolved.database_pool_size,
+        max_overflow=resolved.database_max_overflow,
+        pool_timeout=resolved.database_pool_timeout,
+        connect_args={"command_timeout": resolved.database_command_timeout, "timeout": 5},
+    )
 
 
 def create_session_factory(

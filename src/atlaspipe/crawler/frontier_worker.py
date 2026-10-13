@@ -5,6 +5,7 @@ import math
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol
 from urllib.parse import urlsplit
 
@@ -63,6 +64,7 @@ class FrontierWorker:
         self._retry_policy = retry_policy or RetryPolicy(max_retries=0)
         self._lease_renewal_interval_seconds = lease_renewal_interval_seconds
         self._parser = HtmlMetadataParser()
+        self.last_progress_at = datetime.now(UTC)
 
     @classmethod
     def with_session_factory(
@@ -101,12 +103,14 @@ class FrontierWorker:
                 lease_seconds=self._lease_seconds,
             )
         if not leases:
+            self.last_progress_at = datetime.now(UTC)
             return FrontierWorkerResult()
 
         semaphore = asyncio.Semaphore(self._concurrency)
         outcomes = await asyncio.gather(
             *(self._process_with_limit(lease, semaphore) for lease in leases)
         )
+        self.last_progress_at = datetime.now(UTC)
         return FrontierWorkerResult(
             claimed=len(leases),
             completed=sum(1 for outcome in outcomes if outcome),
@@ -164,7 +168,10 @@ class FrontierWorker:
 
     async def _process(self, lease: FrontierLease) -> bool | None:
         async with self._renew_lease_while_processing(lease):
-            result = await self._fetch_with_retries(lease.url)
+            return await self._process_renewed(lease)
+
+    async def _process_renewed(self, lease: FrontierLease) -> bool | None:
+        result = await self._fetch_with_retries(lease.url)
         if result.error_type is not None:
             async with self._repository_context() as repository:
                 accepted = await repository.fail_frontier_item(
@@ -235,8 +242,8 @@ class FrontierWorker:
     def _retry_delay_for_result(self, result: FetchResult, attempt: int) -> float:
         header_delay = retry_after_seconds(result.headers.get("retry-after"))
         if header_delay is not None:
-            return float(header_delay)
-        return self._retry_policy.delay_for_attempt(attempt)
+            return min(float(header_delay), 30.0)
+        return min(self._retry_policy.delay_for_attempt(attempt), 30.0)
 
     @asynccontextmanager
     async def _renew_lease_while_processing(

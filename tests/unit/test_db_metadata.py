@@ -6,12 +6,14 @@ from atlaspipe.db.models import metadata_summary
 def test_database_metadata_declares_required_tables() -> None:
     summary = metadata_summary()
     assert summary["tables"] == [
+        "api_quotas",
         "crawl_attempts",
         "crawl_frontier",
         "crawl_jobs",
         "domain_stats",
         "links",
         "pages",
+        "worker_heartbeats",
     ]
 
 

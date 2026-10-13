@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, PositiveInt
+from pydantic import Field, PositiveInt, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,32 @@ class Settings(BaseSettings):
 
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8000, ge=1, le=65535)
+    api_key: SecretStr = SecretStr("")
+    api_read_key: SecretStr = SecretStr("")
+    metrics_key: SecretStr = SecretStr("")
+    api_requests_per_minute: PositiveInt = 30
+    api_urls_per_minute: PositiveInt = 1000
+    api_max_body_bytes: PositiveInt = 65536
+    database_pool_size: PositiveInt = 10
+    database_max_overflow: int = Field(default=5, ge=0)
+    database_pool_timeout: float = Field(default=5, gt=0)
+    database_command_timeout: float = Field(default=10, gt=0)
+    worker_drain_seconds: float = Field(default=30, gt=0)
+    worker_heartbeat_seconds: float = Field(default=5, gt=0)
+    worker_stale_seconds: float = Field(default=30, gt=0)
+    environment: str = "local"
+    release: str = "development"
+
+    @model_validator(mode="after")
+    def production_safety(self) -> Settings:
+        if self.environment == "production":
+            if len(self.api_key.get_secret_value()) < 32:
+                raise ValueError("production API_KEY must contain at least 32 characters")
+            if len(self.metrics_key.get_secret_value()) < 32:
+                raise ValueError("production METRICS_KEY must contain at least 32 characters")
+            if self.allow_private_networks:
+                raise ValueError("private crawling is forbidden in production")
+        return self
 
 
 @lru_cache

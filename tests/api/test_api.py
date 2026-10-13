@@ -5,14 +5,16 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 from atlaspipe.api.app import create_app
+from atlaspipe.config import Settings
 from atlaspipe.db.repositories import InMemoryRepository
 from atlaspipe.schemas.page import PageRecord
 
 
 def test_health_and_crawl_job_endpoints() -> None:
     repository = InMemoryRepository.empty()
-    app = create_app(repository=repository)
+    app = create_app(repository=repository, settings=Settings(api_key="test-write-key"))
     with TestClient(app) as client:
+        client.headers["Authorization"] = "Bearer test-write-key"
         health = client.get("/health")
         assert health.status_code == 200
         assert health.json()["status"] == "healthy"

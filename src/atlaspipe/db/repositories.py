@@ -577,7 +577,9 @@ class SqlAlchemyRepository(Repository):
                 .order_by(Page.http_status)
             )
         ).all()
-        return [StatusCodeStats(status_code=row[0], pages=row[1]) for row in rows]
+        return [
+            StatusCodeStats(status_code=row[0], pages=row[1]) for row in rows if row[0] is not None
+        ]
 
 
 @dataclass
