@@ -9,7 +9,7 @@ Branch: `feature/production-engineering`.
 | 1 Security and health | Auth, shared PostgreSQL quotas, bounded bodies, connector DNS validation, heartbeat, bounded shutdown and log redaction | 51 tests passed with PostgreSQL 17.11; lint/format/mypy passed; migration drift correction verified below |
 | 2 Observability | Prometheus HTTP/DB/queue/worker metrics, W3C queue tracing, correlation logs, local stack and dashboard | 54 tests passed with PostgreSQL; lint/mypy passed; complete Compose/Grafana rendering blocked by absent Docker |
 | 3 AWS definitions | Private VPC/RDS, independent ECS services, ECR, IAM DB login, admin migration, HTTPS ALB, OIDC, telemetry sidecars, logs/alarms/budget | Terraform fmt/validate passed; mocked plan security assertions passed; actual account plan, IAM reachability and deployment unverified |
-| 4 Delivery | Pending | No remote release |
+| 4 Delivery | Locked CI, PostgreSQL/migration gates, dependency/image scans, SHA-pinned actions, protected OIDC release, authenticated smoke and explicit rollback verification | actionlint passed; controller unit tests prepared; no Docker build or remote CI/release executed |
 | 5 Reliability | Pending | Historical local evidence retained |
 | 6 Performance | Pending | Historical benchmarks retained |
 | 7 Documentation | In progress | Claims limited to executed checks |

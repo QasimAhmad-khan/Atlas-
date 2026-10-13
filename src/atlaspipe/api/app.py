@@ -114,6 +114,7 @@ def create_app(
                     response = await call_next(request)
                     status_code = response.status_code
                     response.headers["X-Request-ID"] = request_id
+                    response.headers["X-Release"] = resolved_settings.release
                     if trace_id():
                         response.headers["X-Trace-ID"] = trace_id() or ""
                     return response

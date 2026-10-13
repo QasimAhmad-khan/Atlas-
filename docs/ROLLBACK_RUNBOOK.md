@@ -1,0 +1,11 @@
+# Rollback runbook
+
+Deployment rollback restores application task revisions and replica counts; it never reverses database migrations. All new migrations are additive. Keep old columns and behavior through the rollback window. Perform a separate reviewed contract migration only after old revisions can no longer be selected. Do not run Alembic downgrade against live data as a release recovery action.
+
+The release controller snapshots both services before migrating, records migration exit status, and checks requested revisions after ECS stability. A circuit breaker may restore an old healthy revision; a successful ECS waiter therefore does not prove a successful release. A smoke failure or wrong primary revision triggers restoration of **both** previous services, another stability wait and revision/replica validation. Outcome JSON reports failed release and successful or failed rollback separately.
+
+For manual recovery, obtain the previous revisions from the last trusted `release-outcome.json`. Verify the compatible schema, then update both services to those revisions/counts, wait for stability, inspect PRIMARY rollout state, and perform authenticated health/job smoke tests. Preserve the failed task logs and alarms. Escalate if rollback cannot become healthy; do not repeatedly replace resources or alter schema without a supported diagnosis.
+
+To prove cloud rollback, first deploy a known healthy revision in an **approved disposable demo environment**, then dispatch the protected release workflow with `inject_broken_release=true`. It replaces API/worker app commands with an immediate failure while retaining a normal migration task. Expect the workflow to fail, capture circuit-breaker/alarm events, and verify the artifact names the previous primary revisions after recovery. Compare running task image digests, job integrity and health before/after, and record actual detection/recovery durations. Do not run this experiment in a shared production environment.
+
+The controller's failure branches are tested with mock ECS responses. This verifies control flow, not AWS rollback. No cloud bad-release experiment or actual restoration is claimed yet. First deployment from zero replicas has no previous healthy application to restore; its failure must not be presented as a successful rollback demonstration.
