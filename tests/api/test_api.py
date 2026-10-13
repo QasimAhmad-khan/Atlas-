@@ -41,7 +41,7 @@ def test_health_and_crawl_job_endpoints() -> None:
 
 def test_pages_filtering_pagination_and_stats() -> None:
     repository = InMemoryRepository.empty()
-    app = create_app(repository=repository)
+    app = create_app(repository=repository, settings=Settings(api_read_key="read-key"))
     now = datetime.now(UTC)
     repository.pages[1] = PageRecord(
         id=1,
@@ -59,7 +59,7 @@ def test_pages_filtering_pagination_and_stats() -> None:
         http_status=404,
         created_at=now,
     )
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Authorization": "Bearer read-key"}) as client:
         pages = client.get("/pages", params={"domain": "example.com", "limit": 1})
         assert pages.status_code == 200
         assert pages.json()["total"] == 1

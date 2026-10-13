@@ -116,7 +116,7 @@ def smoke(base_url: str, key: str, crawl_url: str, digest: str) -> dict[str, Any
         job_id = created.json()["id"]
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
-            response = client.get(f"/jobs/{job_id}")
+            response = client.get(f"/jobs/{job_id}", headers={"Authorization": f"Bearer {key}"})
             response.raise_for_status()
             job = response.json()
             if job["status"] in {"completed", "completed_with_errors"}:

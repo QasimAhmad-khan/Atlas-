@@ -17,7 +17,16 @@ def redact_secrets(
     def clean(value: Any, key: str = "") -> Any:
         if any(
             part in key.lower()
-            for part in ("password", "token", "secret", "authorization", "api_key")
+            for part in (
+                "password",
+                "token",
+                "secret",
+                "authorization",
+                "api_key",
+                "api_read_key",
+                "metrics_key",
+                "credential",
+            )
         ):
             return "[redacted]"
         if isinstance(value, dict):
@@ -27,7 +36,10 @@ def redact_secrets(
         if isinstance(value, str):
 
             def safe_url(match: re.Match[str]) -> str:
-                split = urlsplit(match.group())
+                try:
+                    split = urlsplit(match.group())
+                except ValueError:
+                    return "[invalid-url]"
                 return urlunsplit(
                     (split.scheme, split.netloc.rsplit("@", 1)[-1], split.path, "", "")
                 )
@@ -59,7 +71,7 @@ def log_defaults(
     _logger: object, _method: str, event: MutableMapping[str, Any]
 ) -> MutableMapping[str, Any]:
     for key, value in {
-        "service": "cli",
+        "service": os.getenv("SERVICE", "cli"),
         "environment": os.getenv("ENVIRONMENT", "local"),
         "release": os.getenv("RELEASE", "development"),
         "request_id": None,

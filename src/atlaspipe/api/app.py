@@ -8,10 +8,11 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from opentelemetry import trace
 from opentelemetry.propagate import extract
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import JSONResponse
 
@@ -19,6 +20,7 @@ from atlaspipe.api.routes.crawl import router as crawl_router
 from atlaspipe.api.routes.health import router as health_router
 from atlaspipe.api.routes.pages import router as pages_router
 from atlaspipe.api.routes.stats import router as stats_router
+from atlaspipe.api.security import authorize_read
 from atlaspipe.config import Settings, get_settings
 from atlaspipe.db.repositories import PageRepository
 from atlaspipe.db.session import create_engine, create_session_factory
@@ -122,7 +124,15 @@ def create_app(
                     span.set_attribute("error.type", type(exc).__name__)
                     span.set_status(trace.StatusCode.ERROR)
                     structlog.get_logger().error("http.failed", error_category=type(exc).__name__)
-                    raise
+                    status_code = 503 if isinstance(exc, SQLAlchemyError) else 500
+                    return JSONResponse(
+                        {"detail": "service unavailable"},
+                        status_code=status_code,
+                        headers={
+                            "X-Request-ID": request_id,
+                            "X-Release": resolved_settings.release,
+                        },
+                    )
                 finally:
                     route = getattr(request.scope.get("route"), "path", "unmatched")
                     elapsed = time.perf_counter() - started
@@ -149,6 +159,6 @@ def create_app(
 
     app.include_router(health_router)
     app.include_router(crawl_router)
-    app.include_router(pages_router)
-    app.include_router(stats_router)
+    app.include_router(pages_router, dependencies=[Depends(authorize_read)])
+    app.include_router(stats_router, dependencies=[Depends(authorize_read)])
     return app

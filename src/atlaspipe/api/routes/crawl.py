@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from opentelemetry.propagate import inject
 
 from atlaspipe.api.dependencies import repository_dependency
-from atlaspipe.api.security import authorize_write, consume_quota
+from atlaspipe.api.security import authorize_read, authorize_write, consume_quota
 from atlaspipe.db.repositories import PageRepository
 from atlaspipe.pipeline.validation import validate_public_url
 from atlaspipe.schemas.crawl import CrawlJobResponse, CrawlRequest
@@ -40,7 +40,9 @@ async def create_crawl(
     return job
 
 
-@router.get("/jobs/{job_id}", response_model=CrawlJobResponse)
+@router.get(
+    "/jobs/{job_id}", response_model=CrawlJobResponse, dependencies=[Depends(authorize_read)]
+)
 async def get_job(
     job_id: int,
     repository: PageRepository = RepositoryDependency,

@@ -66,6 +66,15 @@ async def test_postgres_queue_preserves_api_to_worker_trace() -> None:
     ]
     assert {s.name for s in spans} == {"http.request", "crawl.process", "crawl.persist"}
     assert len({s.context.trace_id for s in spans if s.context}) == 1
+    job_trace = spans[0].context
+    assert job_trace is not None
+    database_spans = [
+        s
+        for s in exporter.get_finished_spans()
+        if s.name == "db.query" and s.context and s.context.trace_id == job_trace.trace_id
+    ]
+    assert database_spans
+    assert all("db.statement" not in s.attributes for s in database_spans if s.attributes)
     async with sessions() as session:
         leases = await SqlAlchemyRepository(session).frontier_stats(job_id=response.json()["id"])
         assert leases.complete == 1
@@ -73,3 +82,4 @@ async def test_postgres_queue_preserves_api_to_worker_trace() -> None:
         await session.execute(delete(Page).where(Page.normalized_url == url))
         await session.commit()
     await engine.dispose()
+    exporter.shutdown()

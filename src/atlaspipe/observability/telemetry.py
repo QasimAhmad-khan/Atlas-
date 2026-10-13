@@ -25,6 +25,7 @@ from prometheus_client import (
     generate_latest,
 )
 from sqlalchemy import and_, func, select
+from sqlalchemy.engine import Connection, ExceptionContext
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from atlaspipe.config import Settings
@@ -181,7 +182,7 @@ def instrument_database(engine: AsyncEngine) -> None:
 
     @event.listens_for(engine.sync_engine, "before_cursor_execute")
     def before(
-        connection: object,
+        connection: Connection,
         _cursor: object,
         statement: str,
         _parameters: object,
@@ -191,16 +192,32 @@ def instrument_database(engine: AsyncEngine) -> None:
         operation = statement.split(None, 1)[0].upper() if statement.strip() else "OTHER"
         if operation not in {"SELECT", "INSERT", "UPDATE", "DELETE"}:
             operation = "OTHER"
-        connection.info["atlaspipe_query"] = (time.perf_counter(), operation)  # type: ignore[attr-defined]
+        span = trace.get_tracer("atlaspipe").start_span(
+            "db.query",
+            kind=trace.SpanKind.CLIENT,
+            attributes={"db.system.name": "postgresql", "db.operation.name": operation},
+        )
+        connection.info["atlaspipe_query"] = (time.perf_counter(), operation, span)
 
     @event.listens_for(engine.sync_engine, "after_cursor_execute")
-    def after(connection: object, *_args: object) -> None:
-        started, operation = connection.info.pop("atlaspipe_query", (time.perf_counter(), "OTHER"))  # type: ignore[attr-defined]
-        DB_LATENCY.labels(operation).observe(time.perf_counter() - started)
+    def after(connection: Connection, *_args: object) -> None:
+        entry = connection.info.pop("atlaspipe_query", None)
+        if entry is not None:
+            started, operation, span = entry
+            DB_LATENCY.labels(operation).observe(time.perf_counter() - started)
+            span.end()
 
     @event.listens_for(engine.sync_engine, "handle_error")
-    def error(_context: object) -> None:
+    def error(context: ExceptionContext) -> None:
         DB_ERRORS.inc()
+        if context.connection is not None:
+            entry = context.connection.info.pop("atlaspipe_query", None)
+            if entry is not None:
+                started, operation, span = entry
+                DB_LATENCY.labels(operation).observe(time.perf_counter() - started)
+                span.set_attribute("error.type", type(context.original_exception).__name__)
+                span.set_status(trace.StatusCode.ERROR)
+                span.end()
 
 
 def start_worker_metrics(settings: Settings, engine: AsyncEngine) -> ThreadingHTTPServer:

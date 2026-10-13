@@ -71,3 +71,14 @@ def test_production_configuration_rejects_unsafe_defaults() -> None:
             metrics_key="m" * 32,
             allow_private_networks=True,
         )
+
+
+def test_too_many_urls_never_creates_work() -> None:
+    repository = InMemoryRepository.empty()
+    app = create_app(repository=repository, settings=Settings(api_key="write-key"))
+    with TestClient(app, headers={"Authorization": "Bearer write-key"}) as client:
+        assert (
+            client.post("/crawl", json={"urls": ["https://example.com"] * 501}).status_code == 422
+        )
+    assert not repository.jobs
+    assert not repository.frontier

@@ -12,6 +12,16 @@ from atlaspipe.config import Settings
 from atlaspipe.db.models import ApiQuota
 
 
+def authorize_read(request: Request) -> None:
+    settings: Settings = request.app.state.settings
+    keys = [settings.api_key.get_secret_value(), settings.api_read_key.get_secret_value()]
+    actual = request.headers.get("authorization", "")
+    if not any(
+        key and hmac.compare_digest(actual.encode(), f"Bearer {key}".encode()) for key in keys
+    ):
+        raise HTTPException(401, "data credential required", headers={"WWW-Authenticate": "Bearer"})
+
+
 def authorize_write(request: Request) -> None:
     settings: Settings = request.app.state.settings
     write_key = settings.api_key.get_secret_value()

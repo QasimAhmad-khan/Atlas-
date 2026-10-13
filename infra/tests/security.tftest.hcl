@@ -51,4 +51,8 @@ run "private_database_and_independent_services" {
     condition     = aws_db_instance.main.deletion_protection && !aws_db_instance.main.skip_final_snapshot
     error_message = "Destruction must require an explicit protection change and a final snapshot."
   }
+  assert {
+    condition     = one(one(one(aws_wafv2_web_acl.api.rule).statement).rate_based_statement).evaluation_window_sec == 60
+    error_message = "Ingress limiting must use shared WAF state across API replicas."
+  }
 }
