@@ -1,0 +1,119 @@
+# HELP python_gc_objects_collected_total Objects collected during gc
+# TYPE python_gc_objects_collected_total counter
+python_gc_objects_collected_total{generation="0"} 917.0
+python_gc_objects_collected_total{generation="1"} 10.0
+python_gc_objects_collected_total{generation="2"} 0.0
+# HELP python_gc_objects_uncollectable_total Uncollectable objects found during GC
+# TYPE python_gc_objects_uncollectable_total counter
+python_gc_objects_uncollectable_total{generation="0"} 0.0
+python_gc_objects_uncollectable_total{generation="1"} 0.0
+python_gc_objects_uncollectable_total{generation="2"} 0.0
+# HELP python_gc_collections_total Number of times this generation was collected
+# TYPE python_gc_collections_total counter
+python_gc_collections_total{generation="0"} 94.0
+python_gc_collections_total{generation="1"} 8.0
+python_gc_collections_total{generation="2"} 0.0
+# HELP python_info Python platform information
+# TYPE python_info gauge
+python_info{implementation="CPython",major="3",minor="13",patchlevel="5",version="3.13.5"} 1.0
+# HELP atlaspipe_http_requests_total HTTP responses
+# TYPE atlaspipe_http_requests_total counter
+atlaspipe_http_requests_total{method="GET",route="/ready",status="200"} 1.0
+# HELP atlaspipe_http_requests_created HTTP responses
+# TYPE atlaspipe_http_requests_created gauge
+atlaspipe_http_requests_created{method="GET",route="/ready",status="200"} 1.791926453226055e+09
+# HELP atlaspipe_http_duration_seconds HTTP latency
+# TYPE atlaspipe_http_duration_seconds histogram
+atlaspipe_http_duration_seconds_bucket{le="0.005",method="GET",route="/ready"} 0.0
+atlaspipe_http_duration_seconds_bucket{le="0.01",method="GET",route="/ready"} 0.0
+atlaspipe_http_duration_seconds_bucket{le="0.025",method="GET",route="/ready"} 0.0
+atlaspipe_http_duration_seconds_bucket{le="0.05",method="GET",route="/ready"} 0.0
+atlaspipe_http_duration_seconds_bucket{le="0.075",method="GET",route="/ready"} 0.0
+atlaspipe_http_duration_seconds_bucket{le="0.1",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="0.25",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="0.5",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="0.75",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="1.0",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="2.5",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="5.0",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="7.5",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="10.0",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_bucket{le="+Inf",method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_count{method="GET",route="/ready"} 1.0
+atlaspipe_http_duration_seconds_sum{method="GET",route="/ready"} 0.0965459999970335
+# HELP atlaspipe_http_duration_seconds_created HTTP latency
+# TYPE atlaspipe_http_duration_seconds_created gauge
+atlaspipe_http_duration_seconds_created{method="GET",route="/ready"} 1.7919264532260854e+09
+# HELP atlaspipe_db_query_duration_seconds Database query latency
+# TYPE atlaspipe_db_query_duration_seconds histogram
+atlaspipe_db_query_duration_seconds_bucket{le="0.005",operation="SELECT"} 8.0
+atlaspipe_db_query_duration_seconds_bucket{le="0.01",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="0.025",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="0.05",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="0.075",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="0.1",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="0.25",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="0.5",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="0.75",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="1.0",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="2.5",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="5.0",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="7.5",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="10.0",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_bucket{le="+Inf",operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_count{operation="SELECT"} 9.0
+atlaspipe_db_query_duration_seconds_sum{operation="SELECT"} 0.022053699991374742
+# HELP atlaspipe_db_query_duration_seconds_created Database query latency
+# TYPE atlaspipe_db_query_duration_seconds_created gauge
+atlaspipe_db_query_duration_seconds_created{operation="SELECT"} 1.7919264532168694e+09
+# HELP atlaspipe_db_errors_total Database errors
+# TYPE atlaspipe_db_errors_total counter
+atlaspipe_db_errors_total 0.0
+# HELP atlaspipe_db_errors_created Database errors
+# TYPE atlaspipe_db_errors_created gauge
+atlaspipe_db_errors_created 1.791926285262677e+09
+# HELP atlaspipe_db_pool_connections Pool capacity and usage
+# TYPE atlaspipe_db_pool_connections gauge
+atlaspipe_db_pool_connections{state="checked_out"} 0.0
+atlaspipe_db_pool_connections{state="capacity"} 10.0
+# HELP atlaspipe_worker_items_total Worker processing outcomes
+# TYPE atlaspipe_worker_items_total counter
+# HELP atlaspipe_worker_retries_total Fetch retries
+# TYPE atlaspipe_worker_retries_total counter
+atlaspipe_worker_retries_total 0.0
+# HELP atlaspipe_worker_retries_created Fetch retries
+# TYPE atlaspipe_worker_retries_created gauge
+atlaspipe_worker_retries_created 1.7919262852627363e+09
+# HELP atlaspipe_lease_recoveries_total Expired leases reclaimed
+# TYPE atlaspipe_lease_recoveries_total counter
+atlaspipe_lease_recoveries_total 0.0
+# HELP atlaspipe_lease_recoveries_created Expired leases reclaimed
+# TYPE atlaspipe_lease_recoveries_created gauge
+atlaspipe_lease_recoveries_created 1.7919262852627501e+09
+# HELP atlaspipe_retry_exhaustion_total Items entering dead state
+# TYPE atlaspipe_retry_exhaustion_total counter
+atlaspipe_retry_exhaustion_total 0.0
+# HELP atlaspipe_retry_exhaustion_created Items entering dead state
+# TYPE atlaspipe_retry_exhaustion_created gauge
+atlaspipe_retry_exhaustion_created 1.7919262852627645e+09
+# HELP atlaspipe_frontier_items Current frontier state
+# TYPE atlaspipe_frontier_items gauge
+atlaspipe_frontier_items{state="pending"} 0.0
+atlaspipe_frontier_items{state="leased"} 0.0
+atlaspipe_frontier_items{state="complete"} 0.0
+atlaspipe_frontier_items{state="failed"} 0.0
+atlaspipe_frontier_items{state="dead"} 0.0
+# HELP atlaspipe_oldest_pending_seconds Oldest pending item age
+# TYPE atlaspipe_oldest_pending_seconds gauge
+atlaspipe_oldest_pending_seconds 0.0
+# HELP atlaspipe_workers Worker health counts
+# TYPE atlaspipe_workers gauge
+atlaspipe_workers{state="active"} 0.0
+atlaspipe_workers{state="failed"} 0.0
+atlaspipe_workers{state="stalled"} 0.0
+# HELP atlaspipe_worker_heartbeat_age_seconds Newest heartbeat age
+# TYPE atlaspipe_worker_heartbeat_age_seconds gauge
+atlaspipe_worker_heartbeat_age_seconds 31.0
+# HELP atlaspipe_telemetry_database_up Queue and heartbeat query success
+# TYPE atlaspipe_telemetry_database_up gauge
+atlaspipe_telemetry_database_up 1.0

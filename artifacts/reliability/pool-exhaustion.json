@@ -1,0 +1,9 @@
+{
+  "environment": "local Windows/POSIX fixture; not AWS",
+  "timestamp": "2026-10-13T21:27:45.674462+00:00",
+  "passed": true,
+  "pool_size": 1,
+  "timeout_seconds": 0.05,
+  "recovered": true,
+  "duration_seconds": 0.23879429999942658
+}

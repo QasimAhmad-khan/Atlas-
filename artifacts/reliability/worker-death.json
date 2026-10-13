@@ -1,0 +1,29 @@
+{
+  "timestamp_utc": "2026-10-13T20:47:16.326603+00:00",
+  "run_id": "33912f11bd044b50bc65c118381aa25e",
+  "failure_mode": "real worker process killed while owning PostgreSQL leases",
+  "scheduled": 200,
+  "completed": 200,
+  "dead": 0,
+  "pending": 0,
+  "leased": 0,
+  "worker_processes": 2,
+  "workers_killed": 1,
+  "killed_worker": "worker-death-33912f11bd044b50bc65c118381aa25e-1",
+  "leases_orphaned": 4,
+  "leases_recovered": 4,
+  "stale_completions_rejected": 0,
+  "logical_pages": 200,
+  "logical_duplicates": 0,
+  "lost": 0,
+  "lease_seconds": 2,
+  "max_attempts": 10,
+  "worker_concurrency": 4,
+  "batch_size": 4,
+  "elapsed_seconds": 14.12,
+  "throughput_pages_per_second": 14.16,
+  "notes": [
+    "Leases are not manually expired in this experiment.",
+    "The killed worker cannot attempt a stale completion; stale fencing is covered by postgres_frontier_recovery_demo.json."
+  ]
+}

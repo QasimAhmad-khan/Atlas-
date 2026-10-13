@@ -3,8 +3,8 @@
 PYTHON ?= python
 
 install:
-	$(PYTHON) -m pip install --upgrade pip
-	$(PYTHON) -m pip install -e ".[dev]"
+	$(PYTHON) -m pip install uv==0.13.0
+	uv sync --frozen --extra dev
 
 up:
 	docker compose up --build
@@ -23,11 +23,9 @@ lint:
 
 format:
 	$(PYTHON) -m ruff format .
-	$(PYTHON) -m black .
 
 format-check:
 	$(PYTHON) -m ruff format --check .
-	$(PYTHON) -m black --check .
 
 typecheck:
 	$(PYTHON) -m mypy

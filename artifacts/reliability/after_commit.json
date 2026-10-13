@@ -1,0 +1,17 @@
+{
+  "environment": "local Windows/POSIX fixture; not AWS",
+  "timestamp": "2026-10-13T21:27:44.283073+00:00",
+  "passed": true,
+  "page_count_before_kill": 1,
+  "logical_records_after_recovery": 1,
+  "attempts": 1,
+  "frontier": {
+    "pending": 0,
+    "leased": 0,
+    "complete": 1,
+    "failed": 0,
+    "dead": 0
+  },
+  "recovery_seconds": 0.03185400000074878,
+  "trigger": "actual child process kill at controlled transaction boundary"
+}

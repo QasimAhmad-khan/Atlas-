@@ -1,0 +1,35 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4318
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: atlaspipe-${service}
+          scrape_interval: 15s
+          metrics_path: /internal/metrics
+          authorization:
+            credentials: $${env:METRICS_KEY}
+          static_configs:
+            - targets: [127.0.0.1:${port}]
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 96
+  batch: {}
+exporters:
+  otlphttp:
+    endpoint: $${env:REMOTE_OTLP_ENDPOINT}
+    headers:
+      Authorization: $${env:REMOTE_OTLP_AUTHORIZATION}
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp]
+    metrics:
+      receivers: [prometheus]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp]

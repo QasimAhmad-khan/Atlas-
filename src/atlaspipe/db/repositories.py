@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import NotRequired, Protocol, TypedDict
 from urllib.parse import urlsplit
@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from atlaspipe.db.models import CrawlAttempt, CrawlFrontierItem, CrawlJob, DomainStat, Page
+from atlaspipe.observability.telemetry import EXHAUSTED, RECOVERIES
 from atlaspipe.pipeline.normalization import normalize_url
 from atlaspipe.schemas.crawl import CrawlJobResponse
 from atlaspipe.schemas.page import PageRecord
@@ -34,6 +35,7 @@ class FrontierLease:
     lease_owner: str
     lease_token: str
     lease_expires_at: datetime
+    traceparent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,7 +70,9 @@ class InMemoryFrontierItem(TypedDict):
 
 
 class PageRepository(Protocol):
-    async def create_job(self, urls: list[str]) -> CrawlJobResponse: ...
+    async def create_job(
+        self, urls: list[str], *, traceparent: str | None = None
+    ) -> CrawlJobResponse: ...
 
     async def get_job(self, job_id: int) -> CrawlJobResponse | None: ...
 
@@ -153,15 +157,21 @@ class PageRepository(Protocol):
 
 
 class SqlAlchemyRepository(Repository):
-    async def create_job(self, urls: list[str]) -> CrawlJobResponse:
-        job = CrawlJob(status="pending", requested_urls=urls)
+    async def create_job(
+        self, urls: list[str], *, traceparent: str | None = None
+    ) -> CrawlJobResponse:
+        job = CrawlJob(status="pending", requested_urls=urls, traceparent=traceparent)
         self._session.add(job)
         await self._session.flush()
         return _job_response(job)
 
     async def get_job(self, job_id: int) -> CrawlJobResponse | None:
         job = await self._session.get(CrawlJob, job_id)
-        return _job_response(job) if job else None
+        return (
+            _job_progress(_job_response(job), await self.frontier_stats(job_id=job_id))
+            if job
+            else None
+        )
 
     async def list_pages(
         self,
@@ -305,6 +315,8 @@ class SqlAlchemyRepository(Repository):
             )
         ).all()
         for item in rows:
+            if item.state == "leased":
+                RECOVERIES.inc()
             lease_token = uuid4().hex
             item.state = "leased"
             item.lease_owner = owner
@@ -315,6 +327,19 @@ class SqlAlchemyRepository(Repository):
             item.last_error_type = None
             item.last_error_message = None
         await self._session.flush()
+        parents = (
+            dict(
+                (
+                    await self._session.execute(
+                        select(CrawlJob.id, CrawlJob.traceparent).where(
+                            CrawlJob.id.in_({item.job_id for item in rows})
+                        )
+                    )
+                ).all()
+            )
+            if rows
+            else {}
+        )
         return [
             FrontierLease(
                 id=item.id,
@@ -326,12 +351,13 @@ class SqlAlchemyRepository(Repository):
                 lease_owner=owner,
                 lease_token=item.lease_token or "",
                 lease_expires_at=lease_expires_at,
+                traceparent=parents.get(item.job_id),
             )
             for item in rows
         ]
 
     async def _mark_expired_exhausted_leases_dead(self, now: datetime) -> None:
-        await self._session.execute(
+        result = await self._session.execute(
             update(CrawlFrontierItem)
             .where(
                 CrawlFrontierItem.state == "leased",
@@ -349,6 +375,7 @@ class SqlAlchemyRepository(Repository):
                 updated_at=now,
             )
         )
+        EXHAUSTED.inc(_rowcount(result))
 
     async def complete_frontier_item(
         self,
@@ -463,6 +490,8 @@ class SqlAlchemyRepository(Repository):
             return False
         now = datetime.now(UTC)
         should_retry = item.attempt_count < item.max_attempts
+        if not should_retry:
+            EXHAUSTED.inc()
         item.state = "pending" if should_retry else "dead"
         item.available_at = now + timedelta(seconds=retry_after_seconds) if should_retry else now
         item.lease_owner = None
@@ -577,7 +606,9 @@ class SqlAlchemyRepository(Repository):
                 .order_by(Page.http_status)
             )
         ).all()
-        return [StatusCodeStats(status_code=row[0], pages=row[1]) for row in rows]
+        return [
+            StatusCodeStats(status_code=row[0], pages=row[1]) for row in rows if row[0] is not None
+        ]
 
 
 @dataclass
@@ -588,12 +619,15 @@ class InMemoryRepository:
     next_job_id: int = 1
     next_page_id: int = 1
     next_frontier_id: int = 1
+    traceparents: dict[int, str | None] = field(default_factory=dict)
 
     @classmethod
     def empty(cls) -> InMemoryRepository:
         return cls(jobs={}, pages={}, frontier={})
 
-    async def create_job(self, urls: list[str]) -> CrawlJobResponse:
+    async def create_job(
+        self, urls: list[str], *, traceparent: str | None = None
+    ) -> CrawlJobResponse:
         job = CrawlJobResponse(
             id=self.next_job_id,
             status="pending",
@@ -601,11 +635,13 @@ class InMemoryRepository:
             created_at=datetime.now(UTC),
         )
         self.jobs[job.id] = job
+        self.traceparents[job.id] = traceparent
         self.next_job_id += 1
         return job
 
     async def get_job(self, job_id: int) -> CrawlJobResponse | None:
-        return self.jobs.get(job_id)
+        job = self.jobs.get(job_id)
+        return _job_progress(job, await self.frontier_stats(job_id=job_id)) if job else None
 
     async def list_pages(
         self,
@@ -765,6 +801,7 @@ class InMemoryRepository:
                     lease_owner=owner,
                     lease_token=lease_token,
                     lease_expires_at=lease_expires_at,
+                    traceparent=self.traceparents.get(item["job_id"]),
                 )
             )
         return leases
@@ -880,6 +917,26 @@ class InMemoryRepository:
             failed=counts.get("failed", 0),
             dead=counts.get("dead", 0),
         )
+
+
+def _job_progress(job: CrawlJobResponse, stats: FrontierStats) -> CrawlJobResponse:
+    count = stats.pending + stats.leased + stats.complete + stats.failed + stats.dead
+    if not count or job.status == "cancelled":
+        return job
+    if stats.complete + stats.dead == count:
+        status = "completed_with_errors" if stats.dead else "completed"
+    elif stats.leased or stats.complete or stats.dead:
+        status = "running"
+    else:
+        status = "pending"
+    return job.model_copy(
+        update={
+            "status": status,
+            "processed_count": stats.complete + stats.dead,
+            "success_count": stats.complete,
+            "failure_count": stats.dead,
+        }
+    )
 
 
 def _job_response(job: CrawlJob) -> CrawlJobResponse:

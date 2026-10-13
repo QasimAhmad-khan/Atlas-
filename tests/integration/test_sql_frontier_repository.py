@@ -5,10 +5,10 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 
 from atlaspipe.config import Settings
-from atlaspipe.db.models import CrawlFrontierItem, Page
+from atlaspipe.db.models import CrawlFrontierItem, CrawlJob, Page
 from atlaspipe.db.repositories import SqlAlchemyRepository
 from atlaspipe.db.session import create_engine, create_session_factory
 from atlaspipe.schemas.page import PageRecord
@@ -91,6 +91,10 @@ async def test_sql_frontier_recovers_expired_lease_and_rejects_stale_page_write(
         )
         await session.commit()
 
+    async with session_factory() as session:
+        await session.execute(delete(CrawlJob).where(CrawlJob.id == job.id))
+        await session.execute(delete(Page).where(Page.normalized_url == url))
+        await session.commit()
     await engine.dispose()
 
     assert accepted is False
@@ -132,6 +136,10 @@ async def test_sql_frontier_renews_only_current_live_lease() -> None:
         )
         await session.commit()
 
+    async with session_factory() as session:
+        await session.execute(delete(CrawlJob).where(CrawlJob.id == job.id))
+        await session.execute(delete(Page).where(Page.normalized_url == url))
+        await session.commit()
     await engine.dispose()
 
     assert renewed is True
@@ -176,6 +184,10 @@ async def test_sql_frontier_marks_expired_exhausted_lease_dead() -> None:
         stats = await repository.frontier_stats(job_id=job.id)
         await session.commit()
 
+    async with session_factory() as session:
+        await session.execute(delete(CrawlJob).where(CrawlJob.id == job.id))
+        await session.execute(delete(Page).where(Page.normalized_url == url))
+        await session.commit()
     await engine.dispose()
 
     assert recovered == []

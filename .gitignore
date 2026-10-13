@@ -1,4 +1,11 @@
 .venv/
+work/
+.local-secrets/
+infra/.terraform/
+*.tfstate*
+*.tfplan
+infra/terraform.tfvars
+infra/deployment.json
 .postgres_runtime/
 __pycache__/
 *.py[cod]

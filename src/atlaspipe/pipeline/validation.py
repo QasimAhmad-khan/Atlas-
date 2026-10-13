@@ -23,8 +23,10 @@ def validate_public_url(url: str, *, allow_private: bool = False) -> UrlValidati
         return UrlValidationResult(False, "unsupported_scheme")
     if not split.hostname:
         return UrlValidationResult(False, "missing_host")
+    if split.username is not None or split.password is not None:
+        return UrlValidationResult(False, "embedded_credentials")
 
-    host = split.hostname.lower()
+    host = split.hostname.lower().rstrip(".")
     if host in BLOCKED_HOSTS:
         return UrlValidationResult(False, "blocked_host")
 

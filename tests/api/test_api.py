@@ -5,14 +5,16 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 from atlaspipe.api.app import create_app
+from atlaspipe.config import Settings
 from atlaspipe.db.repositories import InMemoryRepository
 from atlaspipe.schemas.page import PageRecord
 
 
 def test_health_and_crawl_job_endpoints() -> None:
     repository = InMemoryRepository.empty()
-    app = create_app(repository=repository)
+    app = create_app(repository=repository, settings=Settings(api_key="test-write-key"))
     with TestClient(app) as client:
+        client.headers["Authorization"] = "Bearer test-write-key"
         health = client.get("/health")
         assert health.status_code == 200
         assert health.json()["status"] == "healthy"
@@ -39,7 +41,7 @@ def test_health_and_crawl_job_endpoints() -> None:
 
 def test_pages_filtering_pagination_and_stats() -> None:
     repository = InMemoryRepository.empty()
-    app = create_app(repository=repository)
+    app = create_app(repository=repository, settings=Settings(api_read_key="read-key"))
     now = datetime.now(UTC)
     repository.pages[1] = PageRecord(
         id=1,
@@ -57,7 +59,7 @@ def test_pages_filtering_pagination_and_stats() -> None:
         http_status=404,
         created_at=now,
     )
-    with TestClient(app) as client:
+    with TestClient(app, headers={"Authorization": "Bearer read-key"}) as client:
         pages = client.get("/pages", params={"domain": "example.com", "limit": 1})
         assert pages.status_code == 200
         assert pages.json()["total"] == 1

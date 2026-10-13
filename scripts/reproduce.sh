@@ -13,8 +13,8 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install uv==0.13.0
+uv sync --frozen --extra dev
 
 python -m ruff check .
 python -m ruff format --check .

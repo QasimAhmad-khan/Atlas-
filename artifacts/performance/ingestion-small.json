@@ -1,0 +1,12 @@
+{
+  "records": 200,
+  "concurrency": 4,
+  "elapsed_seconds": 0.153211,
+  "records_per_second": 1305.39,
+  "latency_p50_ms": 74.451,
+  "latency_p95_ms": 139.479,
+  "peak_memory_mb": 86.0,
+  "saved": 200,
+  "failed": 0,
+  "duplicates": 0
+}

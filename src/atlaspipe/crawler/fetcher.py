@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import socket
 import time
 from dataclasses import dataclass
 from urllib.parse import urljoin
 
 import aiohttp
+from aiohttp.abc import ResolveResult
 
-from atlaspipe.pipeline.validation import validate_resolved_public_url
+from atlaspipe.pipeline.validation import validate_public_url
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,22 @@ class TooManyRedirectsError(Exception):
     pass
 
 
+class PublicResolver(aiohttp.ThreadedResolver):
+    async def resolve(
+        self,
+        host: str,
+        port: int = 0,
+        family: socket.AddressFamily = socket.AF_INET,
+    ) -> list[ResolveResult]:
+        addresses = await super().resolve(host, port, family)
+        for address in addresses:
+            ip = address["host"]
+            candidate = f"http://[{ip}]" if ":" in ip else f"http://{ip}"
+            if not validate_public_url(candidate).is_valid:
+                raise UnsafeUrlError("non_public_resolved_ip")
+        return addresses
+
+
 class AioHttpFetcher:
     def __init__(
         self,
@@ -56,6 +74,10 @@ class AioHttpFetcher:
 
     async def __aenter__(self) -> AioHttpFetcher:
         self._session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(
+                resolver=None if self._allow_private_networks else PublicResolver(),
+                use_dns_cache=False,
+            ),
             timeout=self._timeout,
             headers={"User-Agent": self._user_agent},
             raise_for_status=False,
@@ -73,7 +95,7 @@ class AioHttpFetcher:
         started = time.perf_counter()
         try:
             current_url = url
-            validation = await validate_resolved_public_url(
+            validation = validate_public_url(
                 current_url,
                 allow_private=self._allow_private_networks,
             )
@@ -85,7 +107,7 @@ class AioHttpFetcher:
                     headers = {key.lower(): value for key, value in response.headers.items()}
                     if response.status in {301, 302, 303, 307, 308} and "location" in headers:
                         current_url = urljoin(str(response.url), headers["location"])
-                        validation = await validate_resolved_public_url(
+                        validation = validate_public_url(
                             current_url,
                             allow_private=self._allow_private_networks,
                         )

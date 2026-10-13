@@ -31,6 +31,8 @@ async def ready(request: Request, response: Response) -> HealthResponse:
     try:
         async with session_factory() as session:
             await session.execute(text("SELECT 1"))
+            await session.execute(text("SELECT traceparent FROM crawl_jobs LIMIT 0"))
+            await session.execute(text("SELECT worker_id FROM worker_heartbeats LIMIT 0"))
     except Exception as exc:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return HealthResponse(status="unhealthy", database=f"unreachable:{type(exc).__name__}")

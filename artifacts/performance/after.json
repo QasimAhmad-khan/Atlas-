@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-10-13T21:21:31.495848+00:00",
+  "database": {
+    "xact_commit": 12641,
+    "xact_rollback": 12561,
+    "blks_read": 23,
+    "blks_hit": 472378,
+    "tup_returned": 182188423,
+    "tup_fetched": 148527
+  }
+}
