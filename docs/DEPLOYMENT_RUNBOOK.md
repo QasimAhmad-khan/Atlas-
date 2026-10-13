@@ -20,4 +20,4 @@ The release process must migrate, verify task exit code, deploy both services, v
 
 ## Verification
 
-Validate 401/403/429 and request limits, readiness during a DB fault, fresh worker heartbeats, successful jobs, trace continuity, alert firing/recovery, circuit breaker behavior and absence of public RDS/metrics access. Record AWS CLI/API output and real dashboard screenshots with revision and time. No AWS deployment, remote CI or full Docker stack has been run in the current environment.
+Validate 401/403/429 and request limits, readiness during a DB fault, fresh worker heartbeats, successful jobs, trace continuity, alert firing/recovery, circuit breaker behavior and absence of public RDS/metrics access. Record AWS CLI/API output and real dashboard screenshots with revision and time. GitHub CI has verified the built container, PostgreSQL smoke checks and image scan; see CI_VERIFICATION.md. No AWS deployment or full Compose/Tempo stack has been run.

@@ -12,7 +12,7 @@ The owner requested a showcase without AWS configuration. No AWS account was con
 | Security and lifecycle | Write/read/metrics credentials, shared quotas, bounded requests, connection DNS validation, heartbeat and deadline drain | Positive/negative API and real PostgreSQL tests |
 | Observability | Prometheus metrics, W3C durable trace propagation, DB spans, redacted JSON logs, rules and dashboard | Trace continuity and rule tests; actual native Windows Grafana/Prometheus screenshots |
 | Infrastructure | Optional private RDS/ECS/ECR/HTTPS/WAF/IAM/OIDC Terraform examples | Validation and mocked security plan passed; no AWS apply |
-| Delivery | Locked CI, immutable release controller, migration/smoke/rollback gates | Workflow lint and mocked controller tests; remote CI and image scan unexecuted |
+| Delivery | Locked CI, immutable release controller, migration/smoke/rollback gates | All three GitHub CI jobs passed, including image/runtime/scan; cloud release unexecuted |
 | Failure experiments | Actual local process deaths, transaction boundaries, DB interruption, pool exhaustion, downstream failures and drain | Raw observations, JUnit and twelve incident reports |
 | Performance | Authenticated k6 profile, 10k-row seed, three runs and CPU/memory/DB samples | Local measurements only; original million-row artifacts preserved |
 | Documentation | Runbooks, decisions, security/incident/performance reports and this report | Evidence links below; AWS live acceptance is outside scope |
@@ -52,12 +52,14 @@ The initial delivery was committed locally. At the owner's subsequent request, `
 | `0ee9f86` | Immutable release and rollback gates | `.github/workflows/`, `src/atlaspipe/release.py`, controller tests and runbooks |
 | `64a015b` | Real fault tests and final security review fixes | `tests/integration/test_reliability_faults.py`, `scripts/fault_worker.py`, read-auth/error-redaction tests, DB spans, WAF examples, locked dependency fixes |
 | `c63b2e1` | Repeatable local performance | `benchmarks/api_load.js`, seed/resource scripts, `artifacts/performance/`, repaired original ingestion benchmark constructor |
+| `1031093` | Repair actual CI failures | Linux provider checksum and current SHA-pinned scanner action in both workflows |
+| `c41e29a` | Remediate container OS findings | Python 3.12 Alpine base and real container/PostgreSQL smoke check |
 
 The final documentation/evidence commit follows these code commits. Inspect its exact hash with `git log -1`; `git show --stat <commit>` lists every changed file. The source ZIP contains the final tracked tree; the local checkout retains the commit history.
 
 ## 4. Exact checks and pass/fail results
 
-Host tooling: Python 3.13.5, PostgreSQL 17.11, uv 0.13.0, Terraform 1.10.5 with locked AWS provider 6.68.0, Prometheus/promtool 3.5.0, actionlint 1.7.7 and k6 1.3.0. CI targets Python 3.12/PostgreSQL 16; that remote combination has not executed here.
+Host tooling: Python 3.13.5, PostgreSQL 17.11, uv 0.13.0, Terraform 1.10.5 with locked AWS provider 6.68.0, Prometheus/promtool 3.5.0, actionlint 1.7.7 and k6 1.3.0. The local commands below record the initial local delivery. GitHub CI subsequently passed on Python 3.12/PostgreSQL 16, including all 73 tests; see CI_VERIFICATION.md for its exact source revision and raw artifacts.
 
 The final executed commands and complete outputs are in [artifacts/verification.txt](../artifacts/verification.txt). Each exited **0**:
 
@@ -85,7 +87,7 @@ Results: Ruff passed; 124 files already formatted; strict typing passed for 47 s
 .\work\venv\Scripts\python.exe -m pip_audit --local --format=json --output artifacts/dependency-audit.json
 ```
 
-Terraform: valid, one mocked security test passed. Promtool: six rules valid and synthetic outage firing/resolution test passed. Actionlint: passed. Dependency audit: no known vulnerabilities after removing unused Black and upgrading locked pytest tooling; [before](../artifacts/dependency-audit-before.json) and [after](../artifacts/dependency-audit.json) reports retained. Container scanning was not run.
+Terraform: valid, one mocked security test passed. Promtool: six rules valid and synthetic outage firing/resolution test passed. Actionlint: passed. Dependency audit: no known vulnerabilities after removing unused Black and upgrading locked pytest tooling; [before](../artifacts/dependency-audit-before.json) and [after](../artifacts/dependency-audit.json) reports retained. The subsequent remote container scan passed at HIGH/CRITICAL severity after remediation of the initial OS findings; raw reports are under artifacts/ci/.
 
 For a new checkout, `uv sync --frozen --extra dev` installs the locked environment. Supply a fresh dedicated PostgreSQL test database, run `uv run --frozen alembic upgrade head`, then the equivalent `uv run --frozen` quality/test commands. Portable binaries and databases in `work/` are not part of the deliverable. See README for Compose startup; fixture databases must contain no unrelated pending jobs.
 
@@ -93,7 +95,9 @@ For a new checkout, `uv sync --frozen --extra dev` installs the locked environme
 
 **Local verified:** API authorization, rate/body limits, unsafe DNS/redirect rejection, real DB persistence/fencing, process crash recovery, health degradation/recovery, drain deadlines, trace continuity, metrics privacy, rule logic, Terraform model checks, workflow syntax, release-controller branches, dependency audit and three authenticated load runs. Native Grafana 12.2.1 rendered the actual provisioned dashboard against authenticated API/worker scrapes from Prometheus 3.5.0. [Screenshots and health/scrape evidence](../artifacts/observability/).
 
-**AWS:** no account configuration, real plan, apply, deployment, fault experiment, IAM connectivity, WAF enforcement, notification delivery, image scan, rollback, snapshot restoration or cloud benchmark was executed. These are optional future examples, outside the user's requested scope. Full Docker/Tempo export and actual paging are also unverified; in-memory exported spans prove propagation but not remote delivery.
+**GitHub CI verified:** [run 38477935037](https://github.com/QasimAhmad-khan/Atlas-/actions/runs/38477935037), source c41e29a, passed quality/infrastructure/image checks. Actual Linux JUnit reports 73 tests with zero failures/errors/skips. The built Alpine image passed real PostgreSQL migration/API/auth smoke checks and the HIGH/CRITICAL/secret scan gate. [CI_VERIFICATION.md](CI_VERIFICATION.md) and artifacts/ci/ contain downloaded evidence.
+
+**AWS:** no account configuration, real plan, apply, deployment, fault experiment, IAM connectivity, WAF enforcement, notification delivery, rollback, snapshot restoration or cloud benchmark was executed. These are optional future examples, outside the user's requested scope. Full Compose/Tempo export and actual paging are also unverified; in-memory exported spans prove propagation but not remote delivery.
 
 ## 6. Benchmark table and raw paths
 
@@ -130,7 +134,7 @@ Evidence: [RELIABILITY_TEST_REPORT.md](RELIABILITY_TEST_REPORT.md), [INCIDENT_RE
 
 The prepared workflow scans/tests before release, uses protected-environment OIDC, publishes immutable image digests, runs a one-off migration and deploys API/worker services. The controller verifies the requested primary revisions and replica counts, then runs authenticated crawl smoke tests. On failure it restores and verifies both previous service revisions/counts. Tests cover task-registration preservation, bad smoke, automatic rollback mistaken for stability, and explicit recovery control flow. Actual migration-task execution and release success/failure in ECS remain unverified.
 
-Evidence is source plus passing unit tests/actionlint, **not an ECS release event or green GitHub CI run**. Application rollback never reverses schema migrations. An optional deliberate bad release and isolated RDS restore procedure are documented but unexecuted. [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md) and [ROLLBACK_RUNBOOK.md](ROLLBACK_RUNBOOK.md).
+Evidence includes passing controller unit tests/actionlint and a **green GitHub CI run**, not an ECS release event. Application rollback never reverses schema migrations. An optional deliberate bad release and isolated RDS restore procedure are documented but unexecuted. [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md) and [ROLLBACK_RUNBOOK.md](ROLLBACK_RUNBOOK.md).
 
 ## 9. Open risks and costs
 
@@ -139,7 +143,7 @@ Evidence is source plus passing unit tests/actionlint, **not an ECS release even
 * The demo defaults are one API, single-AZ RDS and one NAT, with no production HA claim. NAT, ALB, WAF, RDS, task/collector resources and telemetry add recurring cost if deployed. Budget alerts are not spending caps.
 * Three short warm-cache load runs are not sustained production capacity. `/stats` aggregates and database scans need larger-volume profiling before scaling claims.
 * Actual cloud permissions, rotation, restore, managed telemetry, network denial, rollback and notification delivery need separate live validation.
-* Docker image build/scan and full Compose integration remain unexecuted. Windows could exercise the shared stop path, not actual POSIX/ECS signal delivery. Process-memory Prometheus collection depends on Linux; local memory evidence uses Windows process sampling.
+* The image build/scan and container/PostgreSQL smoke passed remotely; full Compose/Tempo integration remains unexecuted. Tests exercise the shared stop path, not actual POSIX/ECS signal delivery. Local memory evidence uses Windows process sampling.
 
 No AWS resources or resource charges were created. [SECURITY_REVIEW.md](SECURITY_REVIEW.md) and [COST_AND_TEARDOWN.md](COST_AND_TEARDOWN.md) document limits and future teardown protections.
 
@@ -149,4 +153,4 @@ No AWS resources or resource charges were created. [SECURITY_REVIEW.md](SECURITY
 
 > Authored validated Terraform ECS/RDS/IAM/OIDC examples and GitHub release/rollback safeguards; measured an authenticated local API at 131–145 requests/sec over three ten-second runs against 10,000 synthetic records.
 
-Do not claim “deployed to AWS,” proven cloud rollback/HA, green remote CI, production scale, or AWS incident recovery from this delivery. The repository and its raw evidence are suitable for technical walkthroughs and interview demonstrations.
+Green remote CI, the built/scanned image and container/database smoke are now supported by evidence. Do not claim “deployed to AWS,” proven cloud rollback/HA, production scale, or AWS incident recovery from this delivery. The repository and its raw evidence are suitable for technical walkthroughs and interview demonstrations.

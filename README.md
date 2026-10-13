@@ -11,7 +11,12 @@ Terraform and protected GitHub release workflows are prepared, with private RDS,
 ECS services, HTTPS, IAM database login, OIDC, ingress limiting and rollback verification.
 Terraform validation/security plan tests, Prometheus rule tests and workflow lint passed.
 **AWS account configuration and deployment are outside this showcase's scope. No AWS resources
-have been provisioned. Remote CI, image scans and the full Compose/Tempo stack remain unverified.**
+have been provisioned. The full Compose/Tempo stack and cloud releases remain unverified.**
+
+[GitHub CI passed](https://github.com/QasimAhmad-khan/Atlas-/actions/runs/38477935037):
+73 tests on Python 3.12/PostgreSQL 16, Terraform/alert checks, an Alpine container build,
+real PostgreSQL container smoke checks, and the HIGH/CRITICAL image-scan gate.
+See [CI verification](docs/CI_VERIFICATION.md) and raw evidence in `artifacts/ci/`.
 
 The dashboard below is an actual local Grafana 12.2.1 capture using Prometheus 3.5.0, authenticated
 API traffic and a running worker. Five-minute rate charts smooth a short traffic burst; the
