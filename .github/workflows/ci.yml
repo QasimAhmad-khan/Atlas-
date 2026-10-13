@@ -62,10 +62,27 @@ jobs:
           docker run --rm --entrypoint promtool -v "$PWD/observability:/rules:ro" -w /rules prom/prometheus:v3.5.0 test rules alerts.test.yml
   image:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: atlaspipe
+          POSTGRES_PASSWORD: atlaspipe
+          POSTGRES_DB: atlaspipe
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U atlaspipe -d atlaspipe"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {ref: "${{ github.sha }}"}
       - run: docker build -t atlaspipe:${{ github.sha }} .
+      - name: Verify container runtime and PostgreSQL
+        run: |
+          docker run --rm --network host -e DATABASE_URL atlaspipe:${{ github.sha }} alembic upgrade head
+          docker run --rm --network host -e DATABASE_URL -v "$PWD/scripts/container_smoke.py:/smoke.py:ro" atlaspipe:${{ github.sha }} python /smoke.py
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: atlaspipe:${{ github.sha }}
