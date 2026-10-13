@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, PositiveInt, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    database_url: str = "postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe"
+    database_url: str = Field(
+        default="postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe", repr=False
+    )
     test_database_url: str = (
         "postgresql+asyncpg://atlaspipe:atlaspipe@localhost:5432/atlaspipe_test"
     )
@@ -44,17 +48,38 @@ class Settings(BaseSettings):
     worker_stale_seconds: float = Field(default=30, gt=0)
     worker_metrics_port: int = Field(default=0, ge=0, le=65535)
     environment: str = "local"
+    service: Literal["api", "worker", "migration", "cli"] = "api"
     release: str = "development"
+    db_host: str = ""
+    db_port: int = Field(default=5432, ge=1, le=65535)
+    db_name: str = "atlaspipe"
+    db_username: str = "atlaspipe_app"
+    db_password: SecretStr = SecretStr("")
+    database_auth: Literal["password", "iam"] = "password"
+    database_ssl: bool = False
+    database_ca_file: str = ""
+    aws_region: str = "us-east-1"
 
     @model_validator(mode="after")
     def production_safety(self) -> Settings:
         if self.environment == "production":
-            if len(self.api_key.get_secret_value()) < 32:
+            if self.service == "api" and len(self.api_key.get_secret_value()) < 32:
                 raise ValueError("production API_KEY must contain at least 32 characters")
-            if len(self.metrics_key.get_secret_value()) < 32:
+            if self.service in {"api", "worker"} and len(self.metrics_key.get_secret_value()) < 32:
                 raise ValueError("production METRICS_KEY must contain at least 32 characters")
             if self.allow_private_networks:
                 raise ValueError("private crawling is forbidden in production")
+            if not self.db_host or not self.database_ssl or not self.database_ca_file:
+                raise ValueError("production database requires DB_HOST and verified TLS CA file")
+        if self.db_host:
+            self.database_url = URL.create(
+                "postgresql+asyncpg",
+                username=self.db_username,
+                password=self.db_password.get_secret_value(),
+                host=self.db_host,
+                port=self.db_port,
+                database=self.db_name,
+            ).render_as_string(hide_password=False)
         return self
 
 

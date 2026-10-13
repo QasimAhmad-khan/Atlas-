@@ -1,0 +1,6 @@
+certificate_arn          = "arn:aws:acm:us-east-1:123456789012:certificate/REPLACE"
+app_secret_arn           = "arn:aws:secretsmanager:us-east-1:123456789012:secret:atlaspipe-app-REPLACE"
+telemetry_secret_arn     = "arn:aws:secretsmanager:us-east-1:123456789012:secret:atlaspipe-telemetry-REPLACE"
+telemetry_otlp_endpoint  = "https://YOUR-OTLP-BACKEND"
+budget_email            = "REPLACE@example.com"
+alarm_email             = "REPLACE@example.com"

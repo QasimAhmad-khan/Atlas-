@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import ssl
 from collections.abc import AsyncIterator
+from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -15,15 +18,37 @@ from atlaspipe.observability.telemetry import instrument_database
 
 def create_engine(settings: Settings | None = None) -> AsyncEngine:
     resolved = settings or get_settings()
+    connect_args: dict[str, Any] = {
+        "command_timeout": resolved.database_command_timeout,
+        "timeout": 5,
+    }
+    if resolved.database_ssl:
+        connect_args["ssl"] = ssl.create_default_context(cafile=resolved.database_ca_file or None)
     engine = create_async_engine(
         resolved.database_url,
         pool_pre_ping=True,
         pool_size=resolved.database_pool_size,
         max_overflow=resolved.database_max_overflow,
         pool_timeout=resolved.database_pool_timeout,
-        connect_args={"command_timeout": resolved.database_command_timeout, "timeout": 5},
+        connect_args=connect_args,
     )
     instrument_database(engine)
+    if resolved.database_auth == "iam":
+
+        @event.listens_for(engine.sync_engine, "do_connect")
+        def iam_connect(
+            _dialect: object, _connection_record: object, _args: object, params: dict[str, Any]
+        ) -> None:
+            import boto3  # type: ignore[import-untyped]
+
+            params["password"] = boto3.client(
+                "rds", region_name=resolved.aws_region
+            ).generate_db_auth_token(
+                DBHostname=resolved.db_host,
+                Port=resolved.db_port,
+                DBUsername=resolved.db_username,
+            )
+
     return engine
 
 

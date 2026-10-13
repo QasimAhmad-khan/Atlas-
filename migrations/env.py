@@ -4,12 +4,11 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from atlaspipe.config import get_settings
 from atlaspipe.db.models import Base
+from atlaspipe.db.session import create_engine
 
 config = context.config
 
@@ -50,13 +49,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = get_database_url()
-    connectable = async_engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_engine(get_settings())
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

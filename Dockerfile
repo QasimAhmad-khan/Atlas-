@@ -14,6 +14,7 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 COPY alembic.ini ./alembic.ini
 COPY migrations ./migrations
+COPY certs ./certs
 
 RUN uv sync --frozen --no-dev --no-editable \
     && useradd --uid 10001 --create-home atlaspipe
